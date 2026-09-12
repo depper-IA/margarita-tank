@@ -11,10 +11,49 @@
 #include <stdatomic.h>
 #include <unistd.h>
 #include <pthread.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif
 #include <errno.h>
+
+/* Winsock sockets are not file descriptors — they need closesocket() rather
+ * than close(), and shutdown()'s "how" values have different names.
+ * Socket handles stay plain int: Windows guarantees kernel handle values fit
+ * in 32 bits, INVALID_SOCKET truncates to -1, and keeping the POSIX type
+ * avoids churning every signature in this file. */
+#ifdef _WIN32
+#define sim_closesocket(fd)  closesocket(fd)
+#define SIM_SHUT_RDWR        SD_BOTH
+/* Winsock's setsockopt() takes const char *, POSIX takes const void *. */
+#define SIM_SOCKOPT_VAL(p)   (const char *)(p)
+#else
+#define sim_closesocket(fd)  close(fd)
+#define SIM_SHUT_RDWR        SHUT_RDWR
+#define SIM_SOCKOPT_VAL(p)   p
+#endif
+
+/* Winsock reports failures through WSAGetLastError(), not errno, so
+ * strerror(errno) would print a stale or bogus message. */
+#ifdef _WIN32
+static const char *sim_sock_strerror(void)
+{
+    static _Thread_local char buf[160];
+    int err = WSAGetLastError();
+    DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                             NULL, (DWORD)err, 0, buf, (DWORD)sizeof(buf), NULL);
+    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) buf[--n] = '\0';
+    if (n == 0) snprintf(buf, sizeof(buf), "Winsock error %d", err);
+    return buf;
+}
+#else
+#define sim_sock_strerror() strerror(errno)
+#endif
 
 /* ---- Thread-safe event queue ---- */
 #define EVT_QUEUE_SIZE 16
@@ -243,7 +282,7 @@ static void handle_client(int client_fd) {
     ble_evt_t disconnect_evt = { .type = BLE_EVT_DISCONNECTED };
     queue_push(&disconnect_evt);
 
-    close(client_fd);
+    sim_closesocket(client_fd);
 }
 
 static void *listener_thread(void *arg) {
@@ -256,7 +295,7 @@ static void *listener_thread(void *arg) {
         int client_fd = accept(s_listen_fd, (struct sockaddr *)&client_addr, &addr_len);
         if (client_fd < 0) {
             if (s_running) {
-                printf("[tcp] Accept error: %s\n", strerror(errno));
+                printf("[tcp] Accept error: %s\n", sim_sock_strerror());
             }
             continue;
         }
@@ -270,14 +309,24 @@ static void *listener_thread(void *arg) {
 /* ---- Public API ---- */
 
 int sim_socket_init(int port) {
+#ifdef _WIN32
+    /* Winsock must be initialised before any socket call in this process. */
+    WSADATA wsa_data;
+    int wsa_err = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+    if (wsa_err != 0) {
+        fprintf(stderr, "[tcp] WSAStartup failed: %d\n", wsa_err);
+        return -1;
+    }
+#endif
+
     s_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (s_listen_fd < 0) {
-        fprintf(stderr, "[tcp] Failed to create socket: %s\n", strerror(errno));
+        fprintf(stderr, "[tcp] Failed to create socket: %s\n", sim_sock_strerror());
         return -1;
     }
 
     int opt = 1;
-    setsockopt(s_listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(s_listen_fd, SOL_SOCKET, SO_REUSEADDR, SIM_SOCKOPT_VAL(&opt), sizeof(opt));
 
     struct sockaddr_in addr = {
         .sin_family = AF_INET,
@@ -286,15 +335,15 @@ int sim_socket_init(int port) {
     };
 
     if (bind(s_listen_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        fprintf(stderr, "[tcp] Failed to bind port %d: %s\n", port, strerror(errno));
-        close(s_listen_fd);
+        fprintf(stderr, "[tcp] Failed to bind port %d: %s\n", port, sim_sock_strerror());
+        sim_closesocket(s_listen_fd);
         s_listen_fd = -1;
         return -1;
     }
 
     if (listen(s_listen_fd, 1) < 0) {
-        fprintf(stderr, "[tcp] Failed to listen: %s\n", strerror(errno));
-        close(s_listen_fd);
+        fprintf(stderr, "[tcp] Failed to listen: %s\n", sim_sock_strerror());
+        sim_closesocket(s_listen_fd);
         s_listen_fd = -1;
         return -1;
     }
@@ -304,7 +353,7 @@ int sim_socket_init(int port) {
 
     if (pthread_create(&s_thread, NULL, listener_thread, NULL) != 0) {
         fprintf(stderr, "[tcp] Failed to create listener thread\n");
-        close(s_listen_fd);
+        sim_closesocket(s_listen_fd);
         s_listen_fd = -1;
         s_running = false;
         return -1;
@@ -372,18 +421,21 @@ void sim_socket_shutdown(void) {
     /* Close the client socket to unblock recv() in handle_client */
     pthread_mutex_lock(&s_client_mutex);
     if (s_client_fd >= 0) {
-        shutdown(s_client_fd, SHUT_RDWR);
+        shutdown(s_client_fd, SIM_SHUT_RDWR);
         s_client_fd = -1;
     }
     pthread_mutex_unlock(&s_client_mutex);
     /* Close listen socket to unblock accept() in listener_thread */
     if (s_listen_fd >= 0) {
-        shutdown(s_listen_fd, SHUT_RDWR);
-        close(s_listen_fd);
+        shutdown(s_listen_fd, SIM_SHUT_RDWR);
+        sim_closesocket(s_listen_fd);
         s_listen_fd = -1;
     }
     if (s_thread_started) {
         pthread_join(s_thread, NULL);
     }
+#ifdef _WIN32
+    WSACleanup();
+#endif
     printf("[tcp] Shut down\n");
 }

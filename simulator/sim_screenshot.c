@@ -5,6 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+/* MinGW's mkdir() takes only a path — there is no mode argument. */
+#define sim_mkdir(path, mode) _mkdir(path)
+#else
+#define sim_mkdir(path, mode) mkdir(path, mode)
+#endif
 
 static char s_output_dir[256] = "";
 
@@ -17,7 +24,7 @@ void sim_screenshot_init(const char *output_dir)
     while (len > 1 && s_output_dir[len - 1] == '/') s_output_dir[--len] = '\0';
 
     /* Create directory if it doesn't exist */
-    mkdir(s_output_dir, 0755);
+    sim_mkdir(s_output_dir, 0755);
 }
 
 void sim_screenshot_capture(const uint16_t *framebuffer, int w, int h,

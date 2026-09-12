@@ -1,6 +1,6 @@
 # Clawd Tank Simulator
 
-Native macOS simulator for the Clawd LVGL UI. Runs the same firmware rendering code (`scene.c`, `notification_ui.c`, `ui_manager.c`, `notification.c`) without hardware, using shim headers to replace ESP-IDF APIs.
+Native simulator (macOS, Windows) for the Clawd LVGL UI. Runs the same firmware rendering code (`scene.c`, `notification_ui.c`, `ui_manager.c`, `notification.c`) without hardware, using shim headers to replace ESP-IDF APIs.
 
 Supports two modes:
 - **Interactive** — SDL2 window with keyboard controls
@@ -21,6 +21,31 @@ cd simulator
 cmake -B build
 cmake --build build
 ```
+
+## Windows build
+
+Requires CMake 3.16+, Ninja, and MinGW-w64 GCC (`x86_64-w64-mingw32`, posix thread model — the simulator needs winpthreads). MSVC is not supported.
+
+SDL2 is not packaged for MinGW, so the Windows build must use `-DSTATIC_SDL2=ON`, which downloads and statically links SDL2 2.30.10.
+
+`firmware/managed_components/` is gitignored (ESP-IDF normally populates it), so LVGL has to be cloned by hand first, at the same commit the CI workflows pin:
+
+```bash
+git clone https://github.com/lvgl/lvgl.git firmware/managed_components/lvgl__lvgl
+git -C firmware/managed_components/lvgl__lvgl checkout 85aa60d18b3d5e5588d7b247abf90198f07c8a63  # v9.5.0
+```
+
+Then:
+
+```bash
+cd simulator
+cmake -B build -G Ninja -DSTATIC_SDL2=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+`build/clawd-tank-sim.exe` is self-contained — it links SDL2, libgcc and libwinpthread statically and needs only Windows system DLLs.
+
+Two Windows differences in the TCP protocol: `set_time` logs the request but leaves the host clock alone (changing it needs `SE_SYSTEMTIME_NAME`), and its `tz` field only takes effect for CRT-style zone strings such as `PST8PDT`, not IANA names such as `America/New_York`.
 
 ## Usage
 

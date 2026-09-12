@@ -327,7 +327,18 @@ void ui_manager_tick(void)
         struct timeval tv;
         gettimeofday(&tv, NULL);
         struct tm tm;
+#ifdef _WIN32
+        /* Simulator on MinGW only. struct timeval::tv_sec is long there while
+         * time_t is long long, so &tv.tv_sec is the wrong pointer type, and
+         * localtime_r() is only declared under _POSIX_C_SOURCE. localtime_s()
+         * is always available and takes its arguments in the opposite order.
+         * ESP-IDF never defines _WIN32, so the firmware build below is the
+         * untouched original call. */
+        time_t now = (time_t)tv.tv_sec;
+        localtime_s(&tm, &now);
+#else
         localtime_r(&tv.tv_sec, &tm);
+#endif
         int cur_minute = tm.tm_hour * 60 + tm.tm_min;
         if (cur_minute != s_last_minute) {
             s_last_minute = cur_minute;

@@ -79,13 +79,29 @@ int sim_ble_parse_json(const char *buf, uint16_t len, ble_evt_t *out) {
     } else if (strcmp(action->valuestring, "set_time") == 0) {
         cJSON *epoch = cJSON_GetObjectItem(json, "epoch");
         if (epoch && cJSON_IsNumber(epoch)) {
+#ifdef _WIN32
+            /* Windows has no settimeofday(); SetSystemTime() needs the
+             * SE_SYSTEMTIME_NAME privilege, which an ordinary user process
+             * does not hold. The host clock is already correct, so accept the
+             * action and log it instead of changing the machine's clock. */
+            printf("[tcp] set_time epoch %lld ignored (host clock unchanged on Windows)\n",
+                   (long long)epoch->valuedouble);
+#else
             struct timeval tv = { .tv_sec = (time_t)epoch->valuedouble, .tv_usec = 0 };
             settimeofday(&tv, NULL);
             printf("[tcp] System time set to epoch %lld\n", (long long)tv.tv_sec);
+#endif
         }
         cJSON *tz = cJSON_GetObjectItem(json, "tz");
         if (tz && cJSON_IsString(tz)) {
+#ifdef _WIN32
+            /* No setenv() in the MSVC runtime. Note the CRT only understands
+             * POSIX-style "PST8PDT" TZ strings, not IANA names like
+             * "America/New_York" — those leave the process on local time. */
+            _putenv_s("TZ", tz->valuestring);
+#else
             setenv("TZ", tz->valuestring, 1);
+#endif
             tzset();
             printf("[tcp] Timezone set to %s\n", tz->valuestring);
         }

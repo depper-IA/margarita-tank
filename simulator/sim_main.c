@@ -491,6 +491,12 @@ static void handle_sdl_events(void)
 
 int main(int argc, char *argv[])
 {
+#ifdef SDL_MAIN_HANDLED
+    /* Defined by CMake on Windows so SDL2 leaves main() alone. SDL then
+     * requires an explicit SDL_SetMainReady() before SDL_Init(). */
+    SDL_SetMainReady();
+#endif
+
     parse_args(argc, argv);
 
     /* headless takes precedence over hidden (hidden is meaningless without a window) */

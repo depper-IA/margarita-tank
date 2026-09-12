@@ -92,3 +92,44 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: host/dist/Clawd-Tank.dmg
+
+  build-windows-sim:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up MinGW-w64 toolchain
+        shell: pwsh
+        run: |
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed mingw-w64-x86_64-gcc
+          "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Fetch LVGL (managed component not in git)
+        run: |
+          mkdir -p firmware/managed_components
+          git clone --depth 1 https://github.com/lvgl/lvgl.git firmware/managed_components/lvgl__lvgl
+          cd firmware/managed_components/lvgl__lvgl
+          git fetch --depth 1 origin 85aa60d18b3d5e5588d7b247abf90198f07c8a63
+          git checkout 85aa60d18b3d5e5588d7b247abf90198f07c8a63
+
+      - name: Build static simulator
+        run: |
+          cd simulator
+          cmake -B build-static -G Ninja -DSTATIC_SDL2=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-static
+          # Verify no SDL2 / MinGW runtime dynamic dependency
+          objdump -p build-static/clawd-tank-sim.exe > objdump-out.txt
+          if grep -qiE 'DLL Name:.*(sdl2|libwinpthread|libgcc)' objdump-out.txt; then
+            echo "ERROR: dynamic dependency found"
+            cat objdump-out.txt
+            exit 1
+          fi
+
+      - name: Upload simulator as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Clawd-Tank-sim-windows
+          path: simulator/build-static/clawd-tank-sim.exe

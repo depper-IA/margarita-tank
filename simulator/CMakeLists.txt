@@ -77,6 +77,19 @@ target_link_libraries(clawd-tank-sim PRIVATE
     ${SDL2_TARGET}
 )
 
+if(WIN32)
+    # Winsock2 for sim_socket.c (socket/bind/listen/accept/recv/send live in ws2_32).
+    target_link_libraries(clawd-tank-sim PRIVATE ws2_32)
+    # Keep our plain main(): without this SDL2 renames it to SDL_main and the
+    # link fails looking for WinMain. sim_main.c calls SDL_SetMainReady() instead.
+    target_compile_definitions(clawd-tank-sim PRIVATE SDL_MAIN_HANDLED)
+    if(STATIC_SDL2)
+        # STATIC_SDL2 means "self-contained binary" — also drop the MinGW
+        # runtime DLLs (libgcc_s_seh-1.dll, libwinpthread-1.dll).
+        target_link_options(clawd-tank-sim PRIVATE -static)
+    endif()
+endif()
+
 if(APPLE)
     target_link_libraries(clawd-tank-sim PRIVATE
         "-framework Cocoa"
