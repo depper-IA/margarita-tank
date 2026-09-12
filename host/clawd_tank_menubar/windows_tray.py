@@ -1,0 +1,206 @@
+# host/clawd_tank_menubar/windows_tray.py
+"""The Windows TrayView implementation: pystray menu construction and repainting.
+
+Mirrors rumps_view.py's structure and menu layout as closely as a Win32 tray
+context menu allows. Two real differences from the macOS menu:
+
+- No inline slider affordance exists in a Windows tray menu, so brightness is
+  a submenu of discrete percentage steps instead of a continuously
+  draggable control (see BRIGHTNESS_STEPS below).
+- pystray has no built-in periodic timer (rumps has @rumps.timer), so the
+  ~30s daemon health-check poll runs on a small dedicated background thread
+  started from run().
+"""
+import functools
+import importlib.resources
+import logging
+import threading
+from typing import Optional
+
+import pystray
+from PIL import Image
+
+from .controller import ClawdTankController, SESSION_TIMEOUT_OPTIONS, TrayState
+from .version import get_version
+
+logger = logging.getLogger("clawd-tank.menubar")
+
+_ICON_FILES = {
+    "disconnected": "crab-disconnected",
+    "connected": "crab-connected",
+    "notifications": "crab-notifications",
+}
+
+# Discrete brightness steps. The device range is 0-255 (see slider.py /
+# app.py's create_slider_menu_item(min_val=0, max_val=255, ...)); a Windows
+# tray menu has no drag affordance, so 5 evenly spaced 25%-apart steps
+# stand in for the mac slider.
+BRIGHTNESS_STEPS = [
+    ("0%", 0),
+    ("25%", 64),
+    ("50%", 128),
+    ("75%", 191),
+    ("100%", 255),
+]
+
+HEALTH_CHECK_INTERVAL_SECS = 30
+
+
+@functools.lru_cache(maxsize=len(_ICON_FILES))
+def _load_icon_image(name: str) -> Image.Image:
+    """Cached: render() can fire on every notification/connection event, and
+    there are only 3 possible icons — no reason to re-decode the PNG from
+    disk each time."""
+    icons_dir = importlib.resources.files("clawd_tank_menubar") / "icons"
+    path = icons_dir / f"{name}.png"
+    with importlib.resources.as_file(path) as p:
+        return Image.open(p).convert("RGBA")
+
+
+class WindowsTrayView:
+    """pystray-based TrayView for Windows."""
+
+    def __init__(self):
+        self._state: Optional[TrayState] = None
+        self._controller: Optional[ClawdTankController] = None
+        self._icon: Optional[pystray.Icon] = None
+        self._health_thread: Optional[threading.Thread] = None
+        self._stopping = threading.Event()
+
+    def build(self, controller: ClawdTankController) -> None:
+        self._controller = controller
+
+        def has_state(pred):
+            return lambda item: bool(self._state) and pred(self._state)
+
+        ble_menu = pystray.Menu(
+            pystray.MenuItem(lambda item: self._ble_status_text(), None, enabled=False),
+            pystray.MenuItem(
+                "Enabled",
+                lambda item: controller.toggle_ble_enabled(),
+                checked=has_state(lambda s: s.ble_enabled),
+            ),
+            pystray.MenuItem(
+                "Reconnect",
+                lambda item: controller.reconnect(),
+                enabled=has_state(lambda s: s.ble_enabled),
+            ),
+        )
+        sim_menu = pystray.Menu(
+            pystray.MenuItem(lambda item: self._sim_status_text(), None, enabled=False),
+            pystray.MenuItem(
+                "Enabled",
+                lambda item: controller.toggle_sim_enabled(),
+                checked=has_state(lambda s: s.sim_enabled),
+            ),
+            pystray.MenuItem(
+                "Show Window",
+                lambda item: controller.toggle_sim_window(),
+                checked=has_state(lambda s: s.sim_window_visible),
+                enabled=has_state(lambda s: s.sim_enabled),
+            ),
+            pystray.MenuItem(
+                "Always on Top",
+                lambda item: controller.toggle_sim_pinned(),
+                checked=has_state(lambda s: s.sim_pinned),
+                enabled=has_state(lambda s: s.sim_enabled),
+            ),
+        )
+        brightness_menu = pystray.Menu(*[
+            pystray.MenuItem(
+                label,
+                lambda item, v=value: controller.set_brightness(v),
+                checked=has_state(lambda s, v=value: s.brightness_enabled and s.brightness == v),
+                enabled=has_state(lambda s: s.brightness_enabled),
+            )
+            for label, value in BRIGHTNESS_STEPS
+        ])
+        timeout_menu = pystray.Menu(*[
+            pystray.MenuItem(
+                label,
+                lambda item, s=seconds: controller.select_session_timeout(s),
+                checked=has_state(lambda st, s=seconds: st.session_timeout_seconds == s),
+            )
+            for label, seconds in SESSION_TIMEOUT_OPTIONS
+        ])
+
+        menu = pystray.Menu(
+            pystray.MenuItem(lambda item: self._ble_label(), ble_menu),
+            pystray.MenuItem(lambda item: self._sim_label(), sim_menu),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Brightness", brightness_menu),
+            pystray.MenuItem("Session Timeout", timeout_menu),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                "Install Claude Code Hooks",
+                lambda item: controller.install_hooks(),
+                checked=has_state(lambda s: s.hooks_installed),
+            ),
+            pystray.MenuItem(
+                "Launch at Login",
+                lambda item: controller.toggle_login(),
+                checked=has_state(lambda s: s.login_enabled),
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(f"Version: {get_version()}", None, enabled=False),
+            pystray.MenuItem("Quit Clawd Tank", lambda item: controller.quit()),
+        )
+
+        self._icon = pystray.Icon(
+            "clawd-tank",
+            icon=_load_icon_image(_ICON_FILES["disconnected"]),
+            title="Clawd Tank",
+            menu=menu,
+        )
+
+    def run(self) -> None:
+        """Blocks until quit() is called."""
+        self._health_thread = threading.Thread(target=self._health_loop, daemon=True)
+        self._health_thread.start()
+        self._icon.run()
+
+    def _health_loop(self) -> None:
+        while not self._stopping.wait(HEALTH_CHECK_INTERVAL_SECS):
+            if self._controller:
+                self._controller.check_daemon_health()
+
+    def _ble_status_text(self) -> str:
+        if not self._state or not self._state.ble_enabled:
+            return "Status: Disabled"
+        return "Status: Connected" if self._state.ble_connected else "Status: Connecting..."
+
+    def _sim_status_text(self) -> str:
+        if not self._state or not self._state.sim_enabled:
+            return "Status: Disabled"
+        return "Status: Running" if self._state.sim_connected else "Status: Connecting..."
+
+    def _ble_label(self) -> str:
+        if not self._state or not self._state.ble_enabled:
+            return "BLE — Disabled"
+        if self._state.ble_connected:
+            return "BLE \U0001F7E2 Connected"
+        return "BLE \U0001F7E1 Connecting..."
+
+    def _sim_label(self) -> str:
+        if not self._state or not self._state.sim_enabled:
+            return "Simulator — Disabled"
+        if self._state.sim_connected:
+            return "Simulator \U0001F7E2 Running"
+        return "Simulator \U0001F7E1 Connecting..."
+
+    # --- TrayView protocol ---------------------------------------------
+
+    def render(self, state: TrayState) -> None:
+        self._state = state
+        if self._icon is not None:
+            self._icon.icon = _load_icon_image(_ICON_FILES[state.icon])
+            self._icon.update_menu()
+
+    def alert(self, title: str, message: str) -> None:
+        if self._icon is not None:
+            self._icon.notify(message, title)
+
+    def quit(self) -> None:
+        self._stopping.set()
+        if self._icon is not None:
+            self._icon.stop()
