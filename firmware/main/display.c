@@ -114,9 +114,12 @@ lv_display_t *display_init(void) {
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
     ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel, true));
 
-    // Landscape: swap X/Y, then mirror as needed
+    // Landscape: swap X/Y, then mirror as needed.
+    // Rotated 180° from upstream (both mirror axes flipped, swap unchanged)
+    // so the USB connector ends up on the left when mounted -- a personal
+    // orientation preference, not an upstream default.
     ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(panel, true));
-    ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel, true, false));
+    ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel, false, true));
     // Apply offset for 172-pixel dimension (centered in 240-pixel controller RAM)
     // With swap_xy=true, CASET addresses rows and RASET addresses columns,
     // so the 34-pixel column offset must go on y_gap, not x_gap.
