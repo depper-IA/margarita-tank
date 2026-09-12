@@ -1,7 +1,6 @@
 """Clawd Tank daemon — bridges Claude Code hooks to ESP32 via BLE."""
 
 import asyncio
-import fcntl
 import json
 import logging
 import os
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
 
 from .ble_client import ClawdBleClient
+from .process_utils import pid_alive, terminate_pid
 from .protocol import (
     ASK_USER_QUESTION_TOOL,
     daemon_message_to_ble_payload,
@@ -22,6 +22,7 @@ from .sim_client import SimClient, SIM_DEFAULT_PORT
 from .socket_server import SocketServer
 from .transport import TransportClient
 from . import session_store
+from . import single_instance
 from .session_store import save_sessions, load_sessions
 
 logger = logging.getLogger("clawd-tank")
@@ -71,7 +72,10 @@ def _stop_existing_daemon() -> bool:
     except (ValueError, OSError):
         return False
     try:
-        os.kill(pid, signal.SIGTERM)
+        # On Windows this is TerminateProcess, not SIGTERM, so the old
+        # daemon's _shutdown() never runs. Its lock and PID file are still
+        # released by the OS; a graceful stop needs an IPC request instead.
+        terminate_pid(pid)
     except ProcessLookupError:
         return True  # already dead
     except PermissionError:
@@ -79,9 +83,7 @@ def _stop_existing_daemon() -> bool:
     # Wait up to 3 seconds for it to release the lock
     import time
     for _ in range(30):
-        try:
-            os.kill(pid, 0)  # check if still alive
-        except ProcessLookupError:
+        if not pid_alive(pid):
             return True
         time.sleep(0.1)
     logger.warning("Existing daemon (PID %d) did not exit in time", pid)
@@ -95,22 +97,19 @@ def _acquire_lock(takeover: bool = False) -> int:
     If takeover is False (headless mode), exit if another daemon is running.
     """
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(str(LOCK_PATH), os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fd = single_instance.acquire(LOCK_PATH)
     except OSError:
         if takeover:
             logger.info("Stopping existing daemon to take over...")
             _stop_existing_daemon()
             # Retry the lock
             try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fd = single_instance.acquire(LOCK_PATH)
             except OSError:
-                os.close(fd)
                 print("Could not acquire lock after stopping existing daemon", file=sys.stderr)
                 sys.exit(1)
         else:
-            os.close(fd)
             print("Another clawd-tank daemon is already running", file=sys.stderr)
             sys.exit(0)
     return fd
@@ -526,12 +525,8 @@ class ClawdDaemon:
             pid = state.get("pid")
             if pid is None:
                 continue
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
+            if not pid_alive(pid):
                 dead.append(sid)
-            except PermissionError:
-                pass  # PID belongs to another user — assume alive
         for sid in dead:
             logger.info(
                 "Liveness: evicting session %s (PID %d gone)",
@@ -801,6 +796,22 @@ class ClawdDaemon:
             except Exception:
                 logger.exception("Transport '%s' reconnect failed", name)
 
+    def _install_signal_handlers(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Route SIGTERM/SIGINT to _shutdown() — separated for testability."""
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, lambda: asyncio.create_task(self._shutdown()))
+            except NotImplementedError:
+                # Windows' ProactorEventLoop has no add_signal_handler. The
+                # signal module runs the handler on the main thread outside the
+                # loop, so hop back onto it before touching daemon state.
+                signal.signal(
+                    sig,
+                    lambda _signum, _frame: loop.call_soon_threadsafe(
+                        lambda: asyncio.create_task(self._shutdown())
+                    ),
+                )
+
     async def run(self) -> None:
         """Main daemon loop."""
         logging.basicConfig(
@@ -812,9 +823,7 @@ class ClawdDaemon:
         self._write_pid()
 
         if self._headless:
-            loop = asyncio.get_running_loop()
-            for sig in (signal.SIGTERM, signal.SIGINT):
-                loop.add_signal_handler(sig, lambda: asyncio.create_task(self._shutdown()))
+            self._install_signal_handlers(asyncio.get_running_loop())
 
         await self._socket.start()
 

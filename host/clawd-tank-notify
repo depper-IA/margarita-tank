@@ -21,18 +21,49 @@ PID_PATH = CLAWD_DIR / "daemon.pid"
 SOCKET_PATH = CLAWD_DIR / "sock"
 
 
+def _pid_alive(pid: int) -> bool:
+    """Check if a process exists. Raises OSError if it cannot be determined.
+
+    Inlined rather than imported from clawd_tank_daemon.process_utils because
+    this script is deployed standalone and must stay stdlib-only.
+    """
+    if sys.platform == "win32":
+        # os.kill(pid, 0) raises nothing for a process that has already exited
+        # on Windows, so a handle to it is not enough — check the exit code.
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        # Declared explicitly: ctypes otherwise truncates the HANDLE to an int.
+        kernel32.OpenProcess.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFO
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(ctypes.c_void_p(handle),
+                                               ctypes.byref(code)):
+                return False
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(ctypes.c_void_p(handle))
+    os.kill(pid, 0)  # Check if process exists
+    return True
+
+
 def is_daemon_running() -> bool:
     """Check if the daemon is alive via PID file."""
     if not PID_PATH.exists():
         return False
     try:
         pid = int(PID_PATH.read_text().strip())
-        os.kill(pid, 0)  # Check if process exists
-        return True
+        alive = _pid_alive(pid)
     except (ValueError, ProcessLookupError, PermissionError, OSError):
+        alive = False
+    if not alive:
         # Stale PID file
         PID_PATH.unlink(missing_ok=True)
-        return False
+    return alive
 
 
 def start_daemon() -> None:

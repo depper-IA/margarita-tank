@@ -1420,8 +1420,59 @@ async def test_dedup_only_fires_on_session_start():
 
 # --- Liveness polling (ghost-crab fix) ---
 
+def test_liveness_evicts_a_session_whose_real_process_exited(tmp_path):
+    """Real child process, really killed, then probed.
+
+    `os.kill(pid, 0)` raises nothing for a freshly-exited PID on Windows, so a
+    mocked probe cannot catch a liveness check that never evicts anything.
+    """
+    import subprocess
+    import sys
+
+    d = ClawdDaemon(sim_only=True, sessions_path=tmp_path / "sessions.json")
+    d._transports.clear()
+    d._transport_queues.clear()
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        _add_session(d, "s1", {
+            "state": "idle", "last_event": time.time(),
+            "last_event_monotonic": time.monotonic(), "pid": proc.pid,
+        })
+        assert d._check_liveness() == []
+        assert "s1" in d._session_states
+    finally:
+        proc.kill()
+        proc.wait(timeout=30)
+
+    assert d._check_liveness() == ["s1"]
+    assert "s1" not in d._session_states
+    assert d._session_order == []
+
+
+def test_liveness_does_not_raise_on_a_pid_that_never_existed(tmp_path):
+    """An escaping OSError kills _liveness_checker for the life of the daemon.
+
+    Windows raises a bare OSError (WinError 87) from os.kill for an
+    out-of-range PID, which the old ProcessLookupError/PermissionError handlers
+    did not catch.
+    """
+    d = ClawdDaemon(sim_only=True, sessions_path=tmp_path / "sessions.json")
+    d._transports.clear()
+    d._transport_queues.clear()
+    _add_session(d, "s1", {
+        "state": "idle", "last_event": time.time(),
+        "last_event_monotonic": time.monotonic(), "pid": 999999,
+    })
+
+    assert d._check_liveness() == ["s1"]
+    assert "s1" not in d._session_states
+
+
 def test_liveness_evicts_dead_pid():
-    """Session whose stored PID raises ProcessLookupError on kill(pid, 0) is evicted."""
+    """Session whose stored PID is no longer alive is evicted."""
     from unittest.mock import patch
     d = make_daemon()
     d._session_states["s1"] = {
@@ -1430,7 +1481,7 @@ def test_liveness_evicts_dead_pid():
     }
     d._session_order = [("s1", 1)]
 
-    with patch("clawd_tank_daemon.daemon.os.kill", side_effect=ProcessLookupError):
+    with patch("clawd_tank_daemon.daemon.pid_alive", return_value=False):
         d._check_liveness()
 
     assert "s1" not in d._session_states
@@ -1438,7 +1489,7 @@ def test_liveness_evicts_dead_pid():
 
 
 def test_liveness_keeps_alive_pid():
-    """Session whose PID is alive (kill returns) stays."""
+    """Session whose PID is still alive stays."""
     from unittest.mock import patch
     d = make_daemon()
     d._session_states["s1"] = {
@@ -1446,7 +1497,7 @@ def test_liveness_keeps_alive_pid():
         "last_event_monotonic": time.monotonic(), "pid": 4242,
     }
 
-    with patch("clawd_tank_daemon.daemon.os.kill", return_value=None):
+    with patch("clawd_tank_daemon.daemon.pid_alive", return_value=True):
         d._check_liveness()
 
     assert "s1" in d._session_states
@@ -1461,14 +1512,17 @@ def test_liveness_skips_sessions_without_pid():
         "last_event_monotonic": time.monotonic(),
     }
 
-    with patch("clawd_tank_daemon.daemon.os.kill", side_effect=ProcessLookupError):
+    with patch("clawd_tank_daemon.daemon.pid_alive", return_value=False):
         d._check_liveness()
 
     assert "s1" in d._session_states
 
 
-def test_liveness_treats_permission_error_as_alive():
-    """If kill raises PermissionError (PID belongs to another user), assume alive."""
+def test_liveness_treats_unsignalable_pid_as_alive():
+    """A PID we cannot signal (another user's) counts as alive.
+
+    The platform mapping itself lives in process_utils.pid_alive.
+    """
     from unittest.mock import patch
     d = make_daemon()
     d._session_states["s1"] = {
@@ -1476,7 +1530,7 @@ def test_liveness_treats_permission_error_as_alive():
         "last_event_monotonic": time.monotonic(), "pid": 4242,
     }
 
-    with patch("clawd_tank_daemon.daemon.os.kill", side_effect=PermissionError):
+    with patch("clawd_tank_daemon.daemon.pid_alive", return_value=True):
         d._check_liveness()
 
     assert "s1" in d._session_states
@@ -1496,7 +1550,7 @@ def test_liveness_persists_after_eviction(tmp_path):
     }
     d._session_order = [("s1", 1)]
 
-    with patch("clawd_tank_daemon.daemon.os.kill", side_effect=ProcessLookupError):
+    with patch("clawd_tank_daemon.daemon.pid_alive", return_value=False):
         d._check_liveness()
 
     # Persist file should not contain s1

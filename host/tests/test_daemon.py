@@ -698,3 +698,35 @@ async def test_handle_message_broadcasts_to_dynamically_added_transport():
         await daemon._sender_tasks["sim"]
     except asyncio.CancelledError:
         pass
+
+
+# --- Signal handlers ---
+
+@pytest.mark.asyncio
+async def test_install_signal_handlers_works_on_the_running_loop():
+    """Runs against the real event loop of the current platform.
+
+    asyncio's Windows ProactorEventLoop raises NotImplementedError from
+    add_signal_handler, which used to abort daemon startup in headless mode.
+    """
+    import signal
+    import sys
+
+    daemon = ClawdDaemon()
+    loop = asyncio.get_running_loop()
+    previous = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
+    try:
+        daemon._install_signal_handlers(loop)
+
+        if sys.platform == "win32":
+            # Fallback path: handlers must have landed on the signal module.
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                assert signal.getsignal(sig) not in (
+                    previous[sig], signal.SIG_DFL, signal.SIG_IGN
+                )
+        else:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                assert loop.remove_signal_handler(sig) is True
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)

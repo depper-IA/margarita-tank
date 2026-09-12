@@ -1,5 +1,5 @@
 bleak>=0.21.0
-rumps>=0.4.0
+rumps>=0.4.0; sys_platform == "darwin"
 
 # dev/test dependencies
 pytest>=7.0
