@@ -62,6 +62,48 @@ async def test_write_config_ble_error():
     assert result is False
 
 
+# --- Transient GATT op retry ---
+# A GATT op right after connect (or during a liveness probe) can fail
+# transiently. One bounded retry should absorb that without tearing down
+# the whole connection.
+
+@pytest.mark.asyncio
+async def test_write_notification_retries_once_on_transient_failure():
+    disconnect_calls = []
+    client = ClawdBleClient(on_disconnect_cb=lambda: disconnect_calls.append(True))
+    underlying = MagicMock()
+    underlying.is_connected = True
+    underlying.write_gatt_char = AsyncMock(
+        side_effect=[Exception("Characteristic ... was not found!"), None]
+    )
+    client._client = underlying
+
+    result = await client.write_notification('{"action":"set_time"}')
+
+    assert result is True
+    assert underlying.write_gatt_char.call_count == 2
+    assert client._client is underlying
+    assert disconnect_calls == []
+
+
+@pytest.mark.asyncio
+async def test_write_notification_drops_after_exhausting_retries():
+    disconnect_calls = []
+    client = ClawdBleClient(on_disconnect_cb=lambda: disconnect_calls.append(True))
+    underlying = MagicMock()
+    underlying.is_connected = True
+    underlying.write_gatt_char = AsyncMock(side_effect=Exception("BLE error"))
+    underlying.disconnect = AsyncMock()
+    client._client = underlying
+
+    result = await client.write_notification('{"action":"set_time"}')
+
+    assert result is False
+    assert client._client is None
+    assert disconnect_calls == [True]
+    assert underlying.write_gatt_char.call_count == 2
+
+
 # --- Active liveness probe (ping) ---
 # Regression: on macOS CoreBluetooth the disconnect callback often does NOT fire
 # on range/sleep link loss, and notification writes use response=False so a dead

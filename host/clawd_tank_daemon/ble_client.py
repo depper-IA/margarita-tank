@@ -16,6 +16,11 @@ SCAN_INTERVAL_SECS = 5
 # (much longer, ~20s) read timeout, but on a stale-connected dead link that long
 # hold blocks every other GATT op behind _lock and delays reconnect. Fail fast.
 GATT_READ_TIMEOUT_SECS = 5.0
+# A GATT op right after connect (or during a liveness probe) can fail
+# transiently — see the CharacteristicNotFoundError investigation. One
+# bounded retry absorbs that without tearing down the whole connection.
+GATT_OP_MAX_ATTEMPTS = 2
+GATT_OP_RETRY_DELAY_SECS = 0.3
 
 
 class ClawdBleClient:
@@ -105,6 +110,23 @@ class ClawdBleClient:
                 pass
         self._notify_disconnect()
 
+    async def _retry_gatt_op(self, op):
+        """Run a GATT operation, retrying up to GATT_OP_MAX_ATTEMPTS times with
+        a short delay on failure. Re-raises the last exception if every
+        attempt fails; the caller decides how to handle that (as it already
+        does today for a single-attempt failure)."""
+        for attempt in range(1, GATT_OP_MAX_ATTEMPTS + 1):
+            try:
+                return await op()
+            except Exception as e:
+                if attempt == GATT_OP_MAX_ATTEMPTS:
+                    raise
+                logger.warning(
+                    "GATT op failed (attempt %d/%d), retrying: %s",
+                    attempt, GATT_OP_MAX_ATTEMPTS, e,
+                )
+                await asyncio.sleep(GATT_OP_RETRY_DELAY_SECS)
+
     async def ensure_connected(self) -> None:
         """Reconnect if disconnected."""
         if not self.is_connected:
@@ -121,8 +143,10 @@ class ClawdBleClient:
                 return False
             try:
                 data = payload.encode("utf-8")
-                await self._client.write_gatt_char(
-                    NOTIFICATION_CHR_UUID, data, response=False
+                await self._retry_gatt_op(
+                    lambda: self._client.write_gatt_char(
+                        NOTIFICATION_CHR_UUID, data, response=False
+                    )
                 )
                 logger.debug("Wrote %d bytes to BLE", len(data))
                 return True
@@ -141,7 +165,9 @@ class ClawdBleClient:
                 logger.warning("Not connected, cannot read config")
                 return {}
             try:
-                data = await self._client.read_gatt_char(CONFIG_CHR_UUID)
+                data = await self._retry_gatt_op(
+                    lambda: self._client.read_gatt_char(CONFIG_CHR_UUID)
+                )
                 return json.loads(data.decode("utf-8"))
             except Exception as e:
                 logger.error("Config read failed: %s", e)
@@ -162,9 +188,11 @@ class ClawdBleClient:
             if not self.is_connected:
                 raise ConnectionError("BLE link not connected")
             try:
-                return await asyncio.wait_for(
-                    self._client.read_gatt_char(VERSION_CHR_UUID),
-                    timeout=GATT_READ_TIMEOUT_SECS,
+                return await self._retry_gatt_op(
+                    lambda: asyncio.wait_for(
+                        self._client.read_gatt_char(VERSION_CHR_UUID),
+                        timeout=GATT_READ_TIMEOUT_SECS,
+                    )
                 )
             except Exception as e:
                 logger.warning("BLE version read failed: %s", e)
@@ -213,8 +241,10 @@ class ClawdBleClient:
                 return False
             try:
                 data = payload.encode("utf-8")
-                await self._client.write_gatt_char(
-                    CONFIG_CHR_UUID, data, response=False
+                await self._retry_gatt_op(
+                    lambda: self._client.write_gatt_char(
+                        CONFIG_CHR_UUID, data, response=False
+                    )
                 )
                 logger.debug("Config write: %s", payload)
                 return True
