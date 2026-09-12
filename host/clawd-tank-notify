@@ -18,7 +18,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 CLAWD_DIR = Path.home() / ".clawd-tank"
 PID_PATH = CLAWD_DIR / "daemon.pid"
-SOCKET_PATH = CLAWD_DIR / "sock"
+# POSIX: the Unix socket itself. Windows has no AF_UNIX, so this is the file the
+# daemon publishes its loopback port and shared secret in — see
+# clawd_tank_daemon/socket_server.py, which has to agree on the name.
+SOCKET_PATH = CLAWD_DIR / ("endpoint.json" if sys.platform == "win32" else "sock")
 
 
 def _pid_alive(pid: int) -> bool:
@@ -91,21 +94,37 @@ def start_daemon() -> None:
 
 
 def send_to_daemon(payload: dict) -> None:
-    """Send a JSON message to the daemon via Unix socket."""
+    """Send a JSON message to the daemon.
+
+    POSIX connects straight to the Unix socket. Windows has no AF_UNIX: the
+    daemon publishes a loopback port and a shared secret in SOCKET_PATH, and the
+    secret goes out as the first line to authorise the connection.
+    """
     from clawd_tank_daemon.protocol import hook_payload_to_daemon_message
 
     msg = hook_payload_to_daemon_message(payload)
     if msg is None:
         return  # Irrelevant hook event
 
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    if sys.platform == "win32":
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    else:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         sock.settimeout(3.0)
-        sock.connect(str(SOCKET_PATH))
+        if sys.platform == "win32":
+            endpoint = json.loads(SOCKET_PATH.read_text(encoding="utf-8"))
+            sock.connect(("127.0.0.1", endpoint["port"]))
+            sock.sendall(endpoint["token"].encode("utf-8") + b"\n")
+        else:
+            sock.connect(str(SOCKET_PATH))
         # Messages are newline-delimited so the server can use readline()
         # for a reliable message boundary.
         sock.sendall(json.dumps(msg).encode("utf-8") + b"\n")
-    except (ConnectionRefusedError, FileNotFoundError, socket.timeout) as e:
+    # json.JSONDecodeError and KeyError cover a torn or stale endpoint file and
+    # can only arise on the Windows branch, so the POSIX failure set is unchanged.
+    except (ConnectionRefusedError, FileNotFoundError, socket.timeout,
+            json.JSONDecodeError, KeyError) as e:
         print(f"Failed to send to daemon: {e}", file=sys.stderr)
         # Exit 0: notifications are best-effort; a non-zero exit would
         # surface a noisy error in Claude Code for a non-critical failure.

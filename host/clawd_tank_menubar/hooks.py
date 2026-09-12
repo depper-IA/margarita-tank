@@ -5,7 +5,9 @@ import copy
 import json
 import logging
 import os
+import re
 import stat
+import sys
 import textwrap
 from pathlib import Path
 
@@ -14,7 +16,12 @@ from clawd_tank_daemon.protocol import ASK_USER_QUESTION_TOOL
 logger = logging.getLogger("clawd-tank.hooks")
 
 CLAWD_DIR = Path.home() / ".clawd-tank"
-NOTIFY_SCRIPT_PATH = CLAWD_DIR / "clawd-tank-notify"
+# Windows cannot execute an extensionless file with a shebang, and the command
+# below names the interpreter explicitly, so the script needs the .py suffix
+# for that interpreter to accept it.
+NOTIFY_SCRIPT_PATH = CLAWD_DIR / (
+    "clawd-tank-notify.py" if sys.platform == "win32" else "clawd-tank-notify"
+)
 CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
 
 # Standalone hook script — uses only Python stdlib, no external imports.
@@ -22,10 +29,11 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
     #!/usr/bin/env python3
     """clawd-tank-notify - Claude Code hook handler for Clawd Tank.
 
-    Reads hook payload from stdin, converts it to a daemon message,
-    and forwards it via Unix socket. No external dependencies.
+    Reads hook payload from stdin, converts it to a daemon message, and forwards
+    it to the daemon: a Unix socket on POSIX, an authenticated loopback TCP
+    connection on Windows. No external dependencies.
     """
-    # NOTIFY_SCRIPT_VERSION: 2026-05-30-permission-toolfailure
+    # NOTIFY_SCRIPT_VERSION: 2026-09-12-windows-ingress
 
     import json
     import os
@@ -35,9 +43,12 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
     import sys
     from pathlib import Path
 
+    # POSIX: the Unix socket itself. Windows: the file the daemon publishes its
+    # loopback port and shared secret in.
     SOCKET_PATH = os.environ.get(
         "CLAWD_TANK_SOCKET",
-        str(Path.home() / ".clawd-tank" / "sock"),
+        str(Path.home() / ".clawd-tank"
+            / ("endpoint.json" if sys.platform == "win32" else "sock")),
     )
 
     _CLAUDE_ARGV_RE = re.compile(r"(^|/)claude($|\\s)")
@@ -60,7 +71,16 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         Claude Code PID. Falls back to os.getppid() if no `claude` ancestor.
 
         Mirrors clawd_tank_daemon/pid_resolver.py — keep in sync.
+
+        Returns None on Windows, where the daemon then falls back to the
+        staleness timeout: there is no `ps`, a Toolhelp32 snapshot exposes image
+        names but not the argv that identifies a node-hosted `claude`, and the
+        hook itself runs under a shell that exits the moment it returns. Sending
+        that shell's PID would be worse than sending none — the daemon would see
+        it die and evict a session that is very much alive.
         """
+        if sys.platform == "win32":
+            return None
         start = os.getppid()
         pid = start
         while pid > 1:
@@ -181,12 +201,26 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         if msg is None:
             sys.exit(0)
 
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        # Windows has no AF_UNIX: connect to the loopback port the daemon
+        # published and present its shared secret as the first line.
+        if sys.platform == "win32":
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             sock.settimeout(3.0)
-            sock.connect(SOCKET_PATH)
+            if sys.platform == "win32":
+                with open(SOCKET_PATH, encoding="utf-8") as f:
+                    endpoint = json.load(f)
+                sock.connect(("127.0.0.1", endpoint["port"]))
+                sock.sendall(endpoint["token"].encode("utf-8") + b"\\n")
+            else:
+                sock.connect(SOCKET_PATH)
             sock.sendall(json.dumps(msg).encode("utf-8") + b"\\n")
-        except (ConnectionRefusedError, FileNotFoundError, socket.timeout):
+        # The last two cover a torn or stale endpoint file and can only be
+        # raised on the Windows branch, so POSIX behaviour is unchanged.
+        except (ConnectionRefusedError, FileNotFoundError, socket.timeout,
+                json.JSONDecodeError, KeyError):
             sys.exit(0)
         finally:
             sock.close()
@@ -196,7 +230,17 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         main()
 ''')
 
-HOOK_COMMAND = str(NOTIFY_SCRIPT_PATH)
+# POSIX runs the script directly through its shebang. Windows has no shebang
+# support, so the interpreter is named explicitly. A .cmd shim would work too,
+# but it puts a second process between Claude Code and the hook on the hot path
+# of every event, for nothing.
+if sys.platform == "win32":
+    # Quoted because either path may contain spaces; Claude Code hands the
+    # command to `cmd.exe /d /s /c "<command>"`, which strips only the outer
+    # pair and passes the rest through verbatim.
+    HOOK_COMMAND = f'"{sys.executable}" "{NOTIFY_SCRIPT_PATH}"'
+else:
+    HOOK_COMMAND = str(NOTIFY_SCRIPT_PATH)
 
 HOOKS_CONFIG = {
     "SessionStart": [
@@ -253,10 +297,13 @@ HOOKS_CONFIG = {
 
 
 def install_notify_script() -> None:
-    """Write the standalone notify script to ~/.clawd-tank/clawd-tank-notify."""
+    """Write the standalone notify script to NOTIFY_SCRIPT_PATH."""
     CLAWD_DIR.mkdir(parents=True, exist_ok=True)
     NOTIFY_SCRIPT_PATH.write_text(NOTIFY_SCRIPT, encoding="utf-8")
-    NOTIFY_SCRIPT_PATH.chmod(0o755)
+    if sys.platform != "win32":
+        # Windows has no execute bit — chmod there only toggles read-only — and
+        # HOOK_COMMAND names the interpreter, so nothing needs to be executable.
+        NOTIFY_SCRIPT_PATH.chmod(0o755)
     logger.info("Installed hook script: %s", NOTIFY_SCRIPT_PATH)
 
 
@@ -272,12 +319,28 @@ def _matcher_of(entry: dict):
     return matcher if matcher else None
 
 
+# The prefix match below anchors on the whole command, which is stable on POSIX
+# but not on Windows: HOOK_COMMAND embeds an absolute interpreter path that a
+# rebuilt venv or a moved Python changes, while the script path never moves. An
+# unrecognised prior command is not pruned on reinstall, so it would linger as a
+# duplicate group invoking an interpreter that is no longer there. Match on the
+# script instead, anchored so only `"<interpreter>" "<script>"` with nothing in
+# front of it counts — a wrapper such as `cat "<script>"` still does not.
+if sys.platform == "win32":
+    _OUR_COMMAND_RE = re.compile(
+        '^"[^"]+" "' + re.escape(str(NOTIFY_SCRIPT_PATH)) + '"( |$)')
+else:
+    _OUR_COMMAND_RE = None
+
+
 def _command_is_ours(command) -> bool:
     """True only if a hook command actually invokes our notify script — the exact
     path, or the path followed by args. A command that merely CONTAINS the path as a
     substring (a wrapper, or `cat <path>`) is not ours."""
     if not isinstance(command, str):
         return False
+    if _OUR_COMMAND_RE is not None:
+        return _OUR_COMMAND_RE.match(command) is not None
     return command == HOOK_COMMAND or command.startswith(HOOK_COMMAND + " ")
 
 

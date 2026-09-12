@@ -7,6 +7,7 @@ must be matcher-aware so a new/changed matcher is detected as "outdated".
 """
 
 import json
+import sys
 
 import pytest
 
@@ -283,3 +284,33 @@ def test_install_not_fooled_by_substring_command(settings_path):
     cmds = _commands_for(_read(settings_path), "SessionStart")
     assert "/bin/cat " + HOOK_COMMAND in cmds, "user's command was clobbered"
     assert any(c == HOOK_COMMAND for c in cmds), "our real hook was not added"
+
+
+# --- Windows: the command embeds an interpreter path that can move ------------
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="only the Windows command embeds an interpreter path")
+def test_install_replaces_a_group_left_by_a_different_interpreter(settings_path):
+    """A rebuilt venv or a moved Python changes HOOK_COMMAND. The prior group must
+    be recognised as ours and replaced, not left behind pointing at an
+    interpreter that is no longer there."""
+    stale = f'"C:\\gone\\python.exe" "{hooks.NOTIFY_SCRIPT_PATH}"'
+    assert stale != HOOK_COMMAND
+    settings_path.write_text(json.dumps({
+        "hooks": {"SessionStart": [
+            {"hooks": [{"type": "command", "command": stale}]}
+        ]}
+    }))
+    install_hooks()
+    cmds = _commands_for(_read(settings_path), "SessionStart")
+    assert stale not in cmds, "stale interpreter group was left behind"
+    assert cmds == [HOOK_COMMAND]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
+def test_windows_command_names_the_interpreter_and_a_py_file():
+    """Windows cannot run an extensionless shebang script, so the hook command has
+    to name an interpreter and a .py file, both quoted against spaces in paths."""
+    assert hooks.NOTIFY_SCRIPT_PATH.suffix == ".py"
+    assert HOOK_COMMAND == f'"{sys.executable}" "{hooks.NOTIFY_SCRIPT_PATH}"'

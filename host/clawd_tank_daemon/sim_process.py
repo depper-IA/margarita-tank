@@ -12,6 +12,8 @@ from .sim_client import SimClient, SIM_DEFAULT_PORT
 
 logger = logging.getLogger("clawd-tank.sim-process")
 
+SIM_BINARY = "clawd-tank-sim.exe" if sys.platform == "win32" else "clawd-tank-sim"
+
 
 class SimProcessManager:
     def __init__(self, port: int = SIM_DEFAULT_PORT, on_window_event: Optional[Callable] = None,
@@ -25,21 +27,24 @@ class SimProcessManager:
     def _find_binary(self) -> Optional[str]:
         # 1. Contents/Resources/ (inside .app bundle — helper binaries belong here,
         #    not in Contents/MacOS/, to avoid macOS treating them as the main app)
-        try:
-            from Foundation import NSBundle
-            bundle = NSBundle.mainBundle()
-            if bundle:
-                candidate = os.path.join(bundle.bundlePath(), "Contents", "Resources", "clawd-tank-sim")
-                if os.path.isfile(candidate):
-                    return candidate
-        except ImportError:
-            pass
+        #    There is no .app bundle off macOS, and Foundation only exists there.
+        if sys.platform == "darwin":
+            try:
+                from Foundation import NSBundle
+                bundle = NSBundle.mainBundle()
+                if bundle:
+                    candidate = os.path.join(bundle.bundlePath(), "Contents", "Resources", "clawd-tank-sim")
+                    if os.path.isfile(candidate):
+                        return candidate
+            except ImportError:
+                pass
         # 2. Next to sys.executable (fallback for non-bundle environments)
         exe_dir = os.path.dirname(sys.executable)
-        candidate = os.path.join(exe_dir, "clawd-tank-sim")
+        candidate = os.path.join(exe_dir, SIM_BINARY)
         if os.path.isfile(candidate):
             return candidate
-        # 3. PATH lookup (development)
+        # 3. PATH lookup (development) — which() applies PATHEXT on Windows,
+        #    so the bare name still resolves the .exe there.
         return shutil.which("clawd-tank-sim")
 
     async def _is_port_in_use(self) -> bool:
@@ -60,9 +65,16 @@ class SimProcessManager:
         """Kill ALL clawd-tank-sim processes. Safe at startup since any existing
         sim is necessarily orphaned from a previous app instance.
         Synchronous — call before the asyncio loop starts."""
+        if sys.platform == "win32":
+            # No pkill, and no stock way to match on the command line either;
+            # taskkill matches the image name, which is enough because the name
+            # is ours. /T takes any child it spawned with it.
+            command = ["taskkill", "/F", "/T", "/IM", SIM_BINARY]
+        else:
+            command = ["pkill", "-9", "-f", "clawd-tank-sim"]
         try:
             result = subprocess.run(
-                ["pkill", "-9", "-f", "clawd-tank-sim"],
+                command,
                 capture_output=True, text=True, timeout=5,
             )
             if result.returncode == 0:
@@ -118,7 +130,15 @@ class SimProcessManager:
             self._client = None
         if self._process and self._process.returncode is None:
             logger.info("Stopping simulator process (PID %d)", self._process.pid)
-            self._process.send_signal(signal.SIGTERM)
+            if sys.platform == "win32":
+                # Windows has no SIGTERM: send_signal(SIGTERM) is literally
+                # TerminateProcess, so this is a kill however it is spelled and
+                # the simulator gets no chance to tidy up. Saying terminate()
+                # keeps the code honest about that. The TCP link is already
+                # closed above, which is the only shutdown notice it does get.
+                self._process.terminate()
+            else:
+                self._process.send_signal(signal.SIGTERM)
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=3.0)
             except asyncio.TimeoutError:

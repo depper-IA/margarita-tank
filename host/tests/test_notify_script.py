@@ -1,10 +1,12 @@
 """End-to-end test of the embedded NOTIFY_SCRIPT: write it to a tempfile,
 invoke as a subprocess with a hook payload on stdin, assert it writes the
-expected JSON to a Unix socket.
+expected JSON to the daemon's ingress — a Unix socket on POSIX, an
+authenticated loopback TCP connection on Windows.
 """
 
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -17,30 +19,62 @@ import pytest
 from clawd_tank_menubar.hooks import NOTIFY_SCRIPT
 from clawd_tank_daemon.protocol import hook_payload_to_daemon_message
 
+WINDOWS = sys.platform == "win32"
+
 
 def _make_sock_path() -> str:
-    """Return a short Unix socket path safe on macOS (max 104 bytes).
+    """Return the path the script will be pointed at through CLAWD_TANK_SOCKET.
 
-    pytest's tmp_path on macOS expands to a very long path under
-    /private/var/folders/... which exceeds AF_UNIX's 104-byte limit.
-    Using tempfile.mkstemp in /tmp gives a short, safe path.
+    POSIX: the Unix socket itself, which must be short — pytest's tmp_path on
+    macOS expands to a very long path under /private/var/folders/... that
+    exceeds AF_UNIX's 104-byte limit, so it goes in /tmp instead.
+    Windows: the endpoint file the daemon publishes its port and token in. No
+    length limit applies, so the platform temp directory is fine.
     """
-    fd, path = tempfile.mkstemp(prefix="ct_", suffix=".sock", dir="/tmp")
+    fd, path = tempfile.mkstemp(
+        prefix="ct_",
+        suffix=".json" if WINDOWS else ".sock",
+        dir=None if WINDOWS else "/tmp",
+    )
     os.close(fd)
     os.unlink(path)  # bind() requires the file to not exist
     return path
 
 
-def _run_script_with_payload(payload: dict, sock_path: str) -> dict:
-    """Run NOTIFY_SCRIPT in a subprocess with payload on stdin; return the
-    JSON message it sent over the Unix socket. Returns {} if nothing arrived."""
-    received = {}
-
-    def server():
+def _listen(sock_path: str) -> tuple[socket.socket, str]:
+    """Bind the ingress the script will connect to, returning it and the token
+    it must present. On Windows the port and token are published exactly the way
+    SocketServer publishes them; on POSIX there is no token."""
+    if WINDOWS:
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.bind(("127.0.0.1", 0))
+        token = secrets.token_urlsafe(32)
+        Path(sock_path).write_text(
+            json.dumps({"port": srv.getsockname()[1], "token": token}),
+            encoding="utf-8",
+        )
+    else:
         srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         srv.bind(sock_path)
-        srv.listen(1)
-        srv.settimeout(5.0)
+        token = ""
+    srv.listen(1)
+    srv.settimeout(5.0)
+    return srv, token
+
+
+def _run_script_with_payload(payload: dict, sock_path: str,
+                             auth_out: list | None = None) -> dict:
+    """Run NOTIFY_SCRIPT in a subprocess with payload on stdin; return the JSON
+    message it sent to the ingress. Returns {} if nothing arrived.
+
+    The token is enforced, not just observed: a script that failed to
+    authenticate delivers nothing, so every test here covers the handshake.
+    Pass auth_out to also capture the line the script offered as its token.
+    """
+    received = {}
+    srv, token = _listen(sock_path)
+
+    def server():
         try:
             conn, _ = srv.accept()
             data = b""
@@ -54,22 +88,32 @@ def _run_script_with_payload(payload: dict, sock_path: str) -> dict:
                     break
                 data += chunk
             conn.close()
-            line = data.decode("utf-8").strip()
-            if line:
-                received.update(json.loads(line))
+            lines = data.decode("utf-8").splitlines()
+            if WINDOWS:
+                offered = lines.pop(0) if lines else ""
+                if auth_out is not None:
+                    auth_out.append(offered)
+                if offered != token:
+                    return
+            if lines and lines[0].strip():
+                received.update(json.loads(lines[0]))
         except socket.timeout:
             pass
         finally:
             srv.close()
             try:
                 os.unlink(sock_path)
-            except FileNotFoundError:
+            except (FileNotFoundError, PermissionError):
                 pass
 
     t = threading.Thread(target=server)
     t.start()
 
-    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+    # encoding="utf-8" matches install_notify_script(); without it Windows
+    # writes the script in the locale codepage and the interpreter refuses
+    # to parse its own source.
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
+                                     encoding="utf-8") as f:
         f.write(NOTIFY_SCRIPT)
         script_path = f.name
     os.chmod(script_path, 0o755)
@@ -93,6 +137,18 @@ def _run_script_with_payload(payload: dict, sock_path: str) -> dict:
     return received
 
 
+def _assert_pid(msg: dict) -> None:
+    """The script stamps the resolved Claude Code PID on POSIX. On Windows it
+    deliberately sends none — see NOTIFY_SCRIPT._find_claude_pid — so the daemon
+    falls back to staleness eviction instead of watching a PID that is not
+    Claude Code's."""
+    if WINDOWS:
+        assert msg.get("pid") is None
+    else:
+        assert isinstance(msg.get("pid"), int)
+        assert msg["pid"] > 0
+
+
 def test_notify_script_stamps_pid_on_session_start(tmp_path):
     sock_path = _make_sock_path()
     msg = _run_script_with_payload({
@@ -103,8 +159,7 @@ def test_notify_script_stamps_pid_on_session_start(tmp_path):
     }, sock_path)
     assert msg.get("event") == "session_start"
     assert msg.get("session_id") == "test-session-123"
-    assert isinstance(msg.get("pid"), int)
-    assert msg["pid"] > 0
+    _assert_pid(msg)
     assert msg.get("source") == "startup"
 
 
@@ -117,7 +172,7 @@ def test_notify_script_stamps_pid_on_stop(tmp_path):
     }, sock_path)
     assert msg.get("event") == "add"
     assert msg.get("hook") == "Stop"
-    assert isinstance(msg.get("pid"), int)
+    _assert_pid(msg)
 
 
 def test_notify_script_session_end_includes_reason(tmp_path):
@@ -130,7 +185,7 @@ def test_notify_script_session_end_includes_reason(tmp_path):
     assert msg.get("event") == "dismiss"
     assert msg.get("hook") == "SessionEnd"
     assert msg.get("reason") == "logout"
-    assert isinstance(msg.get("pid"), int)
+    _assert_pid(msg)
 
 
 def test_notify_script_irrelevant_hook_sends_nothing(tmp_path):
@@ -153,7 +208,7 @@ def test_notify_script_post_tool_use_produces_tool_done(tmp_path):
     assert msg.get("event") == "tool_done"
     assert msg.get("session_id") == "s5"
     assert msg.get("tool_name") == "AskUserQuestion"
-    assert isinstance(msg.get("pid"), int)
+    _assert_pid(msg)
 
 
 def test_notify_script_permission_request_produces_permission(tmp_path):
@@ -167,7 +222,7 @@ def test_notify_script_permission_request_produces_permission(tmp_path):
     assert msg.get("event") == "permission"
     assert msg.get("session_id") == "s6"
     assert msg.get("tool_name") == "Bash"
-    assert isinstance(msg.get("pid"), int)
+    _assert_pid(msg)
 
 
 def test_notify_script_post_tool_use_failure_produces_tool_failed(tmp_path):
@@ -181,7 +236,7 @@ def test_notify_script_post_tool_use_failure_produces_tool_failed(tmp_path):
     assert msg.get("event") == "tool_failed"
     assert msg.get("session_id") == "s7"
     assert msg.get("tool_name") == "Read"
-    assert isinstance(msg.get("pid"), int)
+    _assert_pid(msg)
 
 
 # --- Cross-validate the embedded script against the daemon-side converter ---
@@ -218,3 +273,50 @@ def test_notify_script_matches_protocol_converter(hook):
     script_msg.pop("pid", None)
     proto_msg = {k: v for k, v in proto_msg.items() if k != "pid"}
     assert script_msg == proto_msg
+
+
+# --- Windows ingress handshake -----------------------------------------------
+
+
+@pytest.mark.skipif(not WINDOWS, reason="only the Windows ingress is authenticated")
+def test_notify_script_presents_the_published_token_first():
+    """The script must read the token the daemon published and send it ahead of
+    the message; without it the server closes the connection unread."""
+    sock_path = _make_sock_path()
+    offered: list[str] = []
+    msg = _run_script_with_payload(
+        {"hook_event_name": "Stop", "session_id": "s8", "cwd": "/x/proj"},
+        sock_path, auth_out=offered,
+    )
+    assert msg.get("event") == "add"  # delivered, so the token matched
+    assert offered and offered[0]
+    assert offered[0] != json.dumps(msg)  # it is the token line, not the payload
+
+
+@pytest.mark.skipif(not WINDOWS, reason="only the Windows ingress is authenticated")
+def test_notify_script_stays_quiet_when_the_endpoint_file_is_unusable():
+    """A stale, truncated or missing endpoint file must make the hook a no-op, not
+    a crash: notifications are best-effort and a non-zero exit is noise in
+    Claude Code."""
+    for content in (None, "", "{}", "not json"):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "endpoint.json"
+            if content is not None:
+                path.write_text(content, encoding="utf-8")
+
+            with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
+                                             encoding="utf-8") as f:
+                f.write(NOTIFY_SCRIPT)
+                script_path = f.name
+            try:
+                env = os.environ.copy()
+                env["CLAWD_TANK_SOCKET"] = str(path)
+                result = subprocess.run(
+                    [sys.executable, script_path],
+                    input=json.dumps({"hook_event_name": "Stop", "session_id": "s",
+                                      "cwd": "/x/proj"}).encode("utf-8"),
+                    env=env, timeout=5.0, capture_output=True,
+                )
+            finally:
+                os.unlink(script_path)
+            assert result.returncode == 0, f"endpoint {content!r}: {result.stderr}"

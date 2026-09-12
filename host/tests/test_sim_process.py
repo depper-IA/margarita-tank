@@ -4,8 +4,10 @@ import os
 import sys
 import pytest
 from unittest.mock import patch
-from clawd_tank_daemon.sim_process import SimProcessManager
+from clawd_tank_daemon.sim_process import SIM_BINARY, SimProcessManager
 
+@pytest.mark.skipif(sys.platform != "darwin",
+                    reason="the .app bundle layout only exists on macOS")
 def test_find_binary_in_app_bundle():
     """When running inside an .app bundle, finds sim in Contents/Resources/."""
     mgr = SimProcessManager()
@@ -17,6 +19,32 @@ def test_find_binary_in_app_bundle():
         # On macOS, NSBundle is available and returns a real bundle path
         assert path is not None
         assert path.endswith("Contents/Resources/clawd-tank-sim")
+
+def test_find_binary_next_to_the_interpreter_uses_the_platform_suffix():
+    """The sibling-of-sys.executable fallback must look for the name the build
+    actually produces — clawd-tank-sim.exe on Windows, no suffix elsewhere."""
+    mgr = SimProcessManager()
+    seen = []
+    def fake_isfile(path):
+        seen.append(path)
+        return path.endswith(SIM_BINARY)
+    with patch.object(os.path, "isfile", side_effect=fake_isfile):
+        path = mgr._find_binary()
+    assert path == os.path.join(os.path.dirname(sys.executable), SIM_BINARY)
+    assert SIM_BINARY.endswith(".exe") == (sys.platform == "win32")
+
+def test_kill_stale_sims_uses_the_platform_process_killer():
+    """pkill does not exist on Windows; taskkill does, and matches on the image
+    name the .exe actually has."""
+    with patch("subprocess.run") as run:
+        run.return_value.returncode = 0
+        SimProcessManager.kill_stale_sims()
+    command = run.call_args[0][0]
+    if sys.platform == "win32":
+        assert command[0] == "taskkill"
+        assert SIM_BINARY in command
+    else:
+        assert command == ["pkill", "-9", "-f", "clawd-tank-sim"]
 
 def test_find_binary_fallback_to_which():
     mgr = SimProcessManager()
