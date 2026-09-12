@@ -55,6 +55,7 @@ add_executable(clawd-tank-sim
     ${FIRMWARE_DIR}/config_store.c
     ${FIRMWARE_DIR}/rgb_led.c
     ${FIRMWARE_DIR}/pixel_font.c
+    ${FIRMWARE_DIR}/assets/clawd_font_clock_24.c
 )
 
 # Include path order matters:

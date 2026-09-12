@@ -38,6 +38,10 @@
 #include "rle_sprite.h"
 #include "pixel_font.h"
 
+/* Pixel-art clock font (Minecraft.ttf, digits + ':' only) — see
+ * assets/clawd_font_clock_24.c, generated with lv_font_conv. */
+LV_FONT_DECLARE(clawd_font_clock_24);
+
 /* ---------- Constants ---------- */
 
 #define SCENE_HEIGHT       172
@@ -570,8 +574,8 @@ scene_t *scene_create(lv_obj_t *parent)
 
     /* Time label — top-right */
     s->time_label = lv_label_create(s->container);
-    lv_obj_set_style_text_font(s->time_label, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(s->time_label, lv_color_hex(0x4466aa), 0);
+    lv_obj_set_style_text_font(s->time_label, &clawd_font_clock_24, 0);
+    lv_obj_set_style_text_color(s->time_label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(s->time_label, LV_ALIGN_TOP_MID, 0, 4);
     lv_label_set_text(s->time_label, "");
     lv_obj_add_flag(s->time_label, LV_OBJ_FLAG_HIDDEN);
