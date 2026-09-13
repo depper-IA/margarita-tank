@@ -398,6 +398,9 @@ struct scene_t {
      * percentage labels, plus a reset-countdown label. Laid out to the right
      * of the clock on the top bar. */
     lv_obj_t *usage_label;        /* legacy text (kept, unused when bars on) */
+    lv_obj_t *topbar;             /* fixed-width wrapper holding all top-bar
+                                   * widgets, isolated from the animated
+                                   * container to avoid invalidation storms */
     lv_obj_t *topbar_bg;          /* dark status-bar strip behind the row */
     lv_obj_t *ampm_label;         /* AM/PM tag (unused in single-row layout) */
     lv_obj_t *usage_sess_name;    /* "SESION" caption */
@@ -671,24 +674,30 @@ scene_t *scene_create(lv_obj_t *parent)
     s->target_width = 320;
     scene_activate_slot(s, 0, CLAWD_ANIM_IDLE);
 
-    /* Dark status-bar strip across the top, behind the row (like the PC
-     * widget). Created first so it sits below the text/bars in z-order. */
-    s->topbar_bg = lv_obj_create(s->container);
+    /* Top-bar wrapper: a single fixed-size, non-animated child of the
+     * container. ALL top-bar widgets live inside it. This isolates them from
+     * the container's width animation (scene_set_width) — otherwise every
+     * animation frame re-invalidates all ~11 widgets and starves the UI task
+     * (task watchdog reset on the ESP32-C6). With the wrapper, only ONE child
+     * sits in the animated subtree and its internal layout never re-measures. */
+    s->topbar = lv_obj_create(s->container);
+    lv_obj_remove_style_all(s->topbar);
+    lv_obj_set_scrollbar_mode(s->topbar, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(s->topbar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(s->topbar, TOPBAR_W, TOPBAR_H);
+    lv_obj_set_pos(s->topbar, 0, 0);
+    lv_obj_add_flag(s->topbar, LV_OBJ_FLAG_HIDDEN);
+
+    /* Dark status-bar strip, behind the row. Child of the wrapper. */
+    s->topbar_bg = lv_obj_create(s->topbar);
     lv_obj_remove_style_all(s->topbar_bg);
-    /* FIXED width + TOP_LEFT at (0,0). Do NOT use lv_pct() width with a
-     * *_MID alignment here: the container width is animated (scene_set_width),
-     * and a percent-width + horizontal-center couple size<->position on the
-     * animated axis, creating an invalidation loop that starves the UI task
-     * (task watchdog reset). A fixed width on the non-animated origin is
-     * stable. */
     lv_obj_set_size(s->topbar_bg, TOPBAR_W, TOPBAR_H);
     lv_obj_set_pos(s->topbar_bg, 0, 0);
     lv_obj_set_style_bg_opa(s->topbar_bg, LV_OPA_80, 0);
     lv_obj_set_style_bg_color(s->topbar_bg, lv_color_hex(TOPBAR_BG_COLOR), 0);
-    lv_obj_add_flag(s->topbar_bg, LV_OBJ_FLAG_HIDDEN);
 
     /* Clock (right side of the strip, like the PC widget). Montserrat. */
-    s->time_label = lv_label_create(s->container);
+    s->time_label = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->time_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s->time_label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(s->time_label, LV_ALIGN_TOP_LEFT, 8, 10);
@@ -696,7 +705,7 @@ scene_t *scene_create(lv_obj_t *parent)
     lv_obj_add_flag(s->time_label, LV_OBJ_FLAG_HIDDEN);
 
     /* AM/PM tag next to the clock (small). */
-    s->ampm_label = lv_label_create(s->container);
+    s->ampm_label = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->ampm_label, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->ampm_label, lv_color_hex(0xc8c8d0), 0);
     lv_label_set_text(s->ampm_label, "");
@@ -704,21 +713,21 @@ scene_t *scene_create(lv_obj_t *parent)
 
     /* Legacy text label — no longer used for display, kept as a hidden stub
      * so any external reference stays valid. */
-    s->usage_label = lv_label_create(s->container);
+    s->usage_label = lv_label_create(s->topbar);
     lv_obj_add_flag(s->usage_label, LV_OBJ_FLAG_HIDDEN);
 
     /* --- Graphical usage: two progress bars + captions, right of clock --- */
     s->usage_has_data = false;
 
     /* Session caption */
-    s->usage_sess_name = lv_label_create(s->container);
+    s->usage_sess_name = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->usage_sess_name, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->usage_sess_name, lv_color_hex(USAGE_TEXT_COLOR), 0);
     lv_label_set_text(s->usage_sess_name, "SESSION");
     lv_obj_add_flag(s->usage_sess_name, LV_OBJ_FLAG_HIDDEN);
 
     /* Session row: bar + % */
-    s->usage_sess_track = lv_obj_create(s->container);
+    s->usage_sess_track = lv_obj_create(s->topbar);
     lv_obj_remove_style_all(s->usage_sess_track);
     lv_obj_set_size(s->usage_sess_track, USAGE_BAR_W, USAGE_BAR_H);
     lv_obj_set_style_radius(s->usage_sess_track, USAGE_BAR_H / 2, 0);
@@ -733,20 +742,20 @@ scene_t *scene_create(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(s->usage_sess_fill, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(s->usage_sess_fill, lv_color_hex(USAGE_OK_COLOR), 0);
 
-    s->usage_sess_pct = lv_label_create(s->container);
+    s->usage_sess_pct = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->usage_sess_pct, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->usage_sess_pct, lv_color_hex(0xFFFFFF), 0);
     lv_label_set_text(s->usage_sess_pct, "");
 
     /* Weekly caption */
-    s->usage_week_name = lv_label_create(s->container);
+    s->usage_week_name = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->usage_week_name, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->usage_week_name, lv_color_hex(USAGE_TEXT_COLOR), 0);
     lv_label_set_text(s->usage_week_name, "WEEKLY");
     lv_obj_add_flag(s->usage_week_name, LV_OBJ_FLAG_HIDDEN);
 
     /* Weekly row: bar + % */
-    s->usage_week_track = lv_obj_create(s->container);
+    s->usage_week_track = lv_obj_create(s->topbar);
     lv_obj_remove_style_all(s->usage_week_track);
     lv_obj_set_size(s->usage_week_track, USAGE_BAR_W, USAGE_BAR_H);
     lv_obj_set_style_radius(s->usage_week_track, USAGE_BAR_H / 2, 0);
@@ -761,13 +770,13 @@ scene_t *scene_create(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(s->usage_week_fill, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(s->usage_week_fill, lv_color_hex(USAGE_OK_COLOR), 0);
 
-    s->usage_week_pct = lv_label_create(s->container);
+    s->usage_week_pct = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->usage_week_pct, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->usage_week_pct, lv_color_hex(USAGE_TEXT_COLOR), 0);
     lv_label_set_text(s->usage_week_pct, "");
 
     /* Reset caption + value */
-    s->usage_reset_lbl = lv_label_create(s->container);
+    s->usage_reset_lbl = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->usage_reset_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->usage_reset_lbl, lv_color_hex(USAGE_TEXT_COLOR), 0);
     lv_label_set_text(s->usage_reset_lbl, "");
@@ -859,15 +868,7 @@ void scene_set_width(scene_t *scene, int width_px, int anim_ms)
             lv_obj_t *child = lv_obj_get_child(scene->container, ci);
             /* Check if this child is a known scene element */
             bool is_known = (child == scene->sky || child == scene->grass ||
-                             child == scene->time_label || child == scene->usage_label ||
-                             child == scene->ampm_label ||
-                             child == scene->usage_sess_name ||
-                             child == scene->usage_sess_track ||
-                             child == scene->usage_sess_pct ||
-                             child == scene->usage_week_name ||
-                             child == scene->usage_week_track ||
-                             child == scene->usage_week_pct ||
-                             child == scene->usage_reset_lbl ||
+                             child == scene->topbar ||
                              child == scene->noconn_label ||
                              child == scene->hud_canvas ||
                              child == scene->sun || child == scene->moon);
@@ -1161,7 +1162,6 @@ static void scene_layout_topbar(scene_t *scene);
 static void usage_widgets_set_hidden(scene_t *scene, bool hidden)
 {
     lv_obj_t *ws[] = {
-        scene->topbar_bg,
         scene->usage_sess_name, scene->usage_sess_track, scene->usage_sess_pct,
         scene->usage_week_name, scene->usage_week_track, scene->usage_week_pct,
         scene->usage_reset_lbl,
@@ -1177,15 +1177,16 @@ void scene_set_time_visible(scene_t *scene, bool visible)
 {
     if (!scene) return;
     if (visible) {
+        /* Show the wrapper (and its bg strip + clock). */
+        lv_obj_clear_flag(scene->topbar, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
-        /* Show the dark strip whenever the top bar is visible. */
-        lv_obj_clear_flag(scene->topbar_bg, LV_OBJ_FLAG_HIDDEN);
         if (scene->usage_has_data)
             usage_widgets_set_hidden(scene, false);
+        lv_obj_move_foreground(scene->topbar);   /* keep above sprites */
         scene_layout_topbar(scene);
     } else {
-        lv_obj_add_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
-        usage_widgets_set_hidden(scene, true);
+        /* Hide the whole wrapper — cheapest way to remove the entire top bar. */
+        lv_obj_add_flag(scene->topbar, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -1229,7 +1230,7 @@ static void scene_layout_topbar(scene_t *scene)
     const lv_font_t *f_clk = &lv_font_montserrat_14;
 
     bool has_usage = scene->usage_has_data &&
-                     !lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
+                     !lv_obj_has_flag(scene->topbar, LV_OBJ_FLAG_HIDDEN);
 
     int cont_w = TOPBAR_W;   /* top bar only shown at full scene width */
 
@@ -1384,8 +1385,8 @@ void scene_update_usage(scene_t *scene, int session_pct, int weekly_pct,
         lv_label_set_text(scene->usage_reset_lbl, "RST --");
     }
 
-    /* Reveal only when the clock is currently shown. */
-    if (!lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN)) {
+    /* Reveal only when the top bar is currently shown. */
+    if (!lv_obj_has_flag(scene->topbar, LV_OBJ_FLAG_HIDDEN)) {
         usage_widgets_set_hidden(scene, false);
     }
 
