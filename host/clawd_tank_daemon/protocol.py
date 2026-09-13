@@ -10,6 +10,10 @@ from typing import Optional
 # both clawd_tank_daemon and clawd_tank_menubar can import it.
 ASK_USER_QUESTION_TOOL = "AskUserQuestion"
 
+# Fixed display name shown on every notification card, regardless of which
+# project triggered it. Change this one line to rename the crab in the UI.
+DISPLAY_NAME = "Margarita"
+
 
 def hook_payload_to_daemon_message(hook: dict) -> Optional[dict]:
     """Convert a Claude Code hook stdin payload to a daemon message.
@@ -86,8 +90,8 @@ def hook_payload_to_daemon_message(hook: dict) -> Optional[dict]:
             "event": "add",
             "hook": "Stop",
             "session_id": session_id,
-            "project": project,
-            "message": "Waiting for input",
+            "project": DISPLAY_NAME,
+            "message": "Esperando tu respuesta",
             "pid": pid,
         }
 
@@ -96,12 +100,12 @@ def hook_payload_to_daemon_message(hook: dict) -> Optional[dict]:
         project = Path(cwd).name if cwd else "unknown"
         if not project:
             project = "unknown"
-        message = hook.get("error", "") or hook.get("stop_reason", "") or "API error"
+        message = hook.get("error", "") or hook.get("stop_reason", "") or "Error de API"
         return {
             "event": "add",
             "hook": "StopFailure",
             "session_id": session_id,
-            "project": project,
+            "project": DISPLAY_NAME,
             "message": message,
             "pid": pid,
         }
@@ -113,12 +117,12 @@ def hook_payload_to_daemon_message(hook: dict) -> Optional[dict]:
         project = Path(cwd).name if cwd else "unknown"
         if not project:
             project = "unknown"
-        message = hook.get("message", "Waiting for input")
+        message = hook.get("message", "Esperando tu respuesta")
         return {
             "event": "add",
             "hook": "Notification",
             "session_id": session_id,
-            "project": project,
+            "project": DISPLAY_NAME,
             "message": message,
             "pid": pid,
         }

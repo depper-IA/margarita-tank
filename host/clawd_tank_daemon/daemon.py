@@ -61,6 +61,13 @@ PID_DEDUP_FRESHNESS_SECONDS = 60.0
 # never reports range/sleep disconnects, so without this probe a dead link is
 # never detected and the daemon never re-scans. Detection lag ~= this interval.
 BLE_LIVENESS_INTERVAL_SECS = 20.0
+# Sessions WITHOUT a resolvable PID (e.g. every session on Windows, where the
+# hook cannot safely resolve Claude's PID) can't be pruned by the PID-liveness
+# checker. They rely entirely on time-based eviction, so they use a much
+# shorter timeout than PID-backed sessions (which the liveness checker evicts
+# the instant the process dies). Keeps ghost sessions from lingering ~10 min
+# after a terminal is closed. Applies identically on macOS and Windows.
+NO_PID_STALENESS_TIMEOUT = 90.0
 
 
 @runtime_checkable
@@ -172,7 +179,11 @@ class ClawdDaemon:
         now_wall = time.time()
         stale_ids = [
             sid for sid, s in loaded_states.items()
-            if now_wall - s.get("last_event", now_wall) > 600.0  # default timeout
+            # Same adaptive rule as runtime eviction: sessions without a PID
+            # (all persisted sessions, since PID isn't serialized) expire on the
+            # short timeout; PID-backed ones keep the long default.
+            if now_wall - s.get("last_event", now_wall) >
+               (600.0 if s.get("pid") is not None else NO_PID_STALENESS_TIMEOUT)
         ]
         for sid in stale_ids:
             del loaded_states[sid]
@@ -471,14 +482,21 @@ class ClawdDaemon:
         # If last_event_monotonic is stale, subagents are dead too — safe to evict.
         # Uses monotonic time so macOS sleep doesn't trigger mass-eviction on wake.
         now_mono = time.monotonic()
-        stale = [
-            sid for sid, s in self._session_states.items()
+        stale = []
+        for sid, s in self._session_states.items():
             # 'waiting' sessions are blocked on the human and legitimately emit no
             # events; time-based eviction would drop the alert while the user is away.
-            # A dead Claude process is still caught by the PID-liveness checker.
-            if s.get("state") != "waiting"
-            and now_mono - s.get("last_event_monotonic", now_mono) > self._session_staleness_timeout
-        ]
+            if s.get("state") == "waiting":
+                continue
+            # Adaptive timeout: PID-backed sessions are already covered by the
+            # liveness checker (evicted the instant the process dies), so they
+            # keep the long timeout. Sessions with no PID (Windows, or failed
+            # detection) have no such safety net, so they expire much sooner.
+            has_pid = s.get("pid") is not None
+            timeout = self._session_staleness_timeout if has_pid else NO_PID_STALENESS_TIMEOUT
+            idle = now_mono - s.get("last_event_monotonic", now_mono)
+            if idle > timeout:
+                stale.append(sid)
         for sid in stale:
             logger.info("Evicting stale session: %s", sid[:12])
             del self._session_states[sid]
