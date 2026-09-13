@@ -367,7 +367,7 @@ static void rebuild_display(notification_ui_t *ui)
 
     /* ---- Expanded hero mode: large featured card, no compact list ---- */
     if (ui->featured_expanded) {
-        lv_label_set_text(ui->counter_label, "> NEW!");
+        lv_label_set_text(ui->counter_label, "> NUEVO!");
         lv_obj_set_style_text_color(ui->counter_label,
                                     lv_color_hex(0xff6b6b), 0);
 
@@ -382,7 +382,7 @@ static void rebuild_display(notification_ui_t *ui)
 
         /* In hero view, show a prominent "NEW" badge lower in the card */
         lv_obj_set_pos(ui->featured_badge, 0, FEATURED_H_EXPANDED - 24);
-        lv_label_set_text(ui->featured_badge, "NEW");
+        lv_label_set_text(ui->featured_badge, "NUEVO");
         lv_obj_set_style_text_color(ui->featured_badge,
                                     lv_color_hex(0xff6b6b), 0);
 
@@ -403,7 +403,7 @@ static void rebuild_display(notification_ui_t *ui)
     lv_obj_set_style_text_color(ui->counter_label,
                                 lv_color_hex(0xffdd57), 0);
     char counter_buf[24];
-    snprintf(counter_buf, sizeof(counter_buf), "> %d WAITING!", count);
+    snprintf(counter_buf, sizeof(counter_buf), "> %d ESPERANDO!", count);
     lv_label_set_text(ui->counter_label, counter_buf);
 
     /* Featured card at normal height */
@@ -422,7 +422,7 @@ static void rebuild_display(notification_ui_t *ui)
     lv_obj_set_pos(ui->featured_badge, 0, 38);
     bool is_newest = (fi == count - 1);
     if (is_newest) {
-        lv_label_set_text(ui->featured_badge, "NEWEST");
+        lv_label_set_text(ui->featured_badge, "RECIENTE");
         lv_obj_set_style_text_color(ui->featured_badge,
                                     lv_color_hex(0x88cc88), 0);
     } else {
