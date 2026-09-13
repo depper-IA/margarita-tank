@@ -7,6 +7,10 @@ from bleak import BleakClient, BleakScanner
 
 logger = logging.getLogger("clawd-tank.ble")
 
+# BLE advertised name the firmware uses (ble_service.c). Must match exactly or
+# the scanner never finds the device. Single source of truth for renaming.
+DEVICE_NAME = "Margarita"
+
 SERVICE_UUID = "aecbefd9-98a2-4773-9fed-bb2166daa49a"
 NOTIFICATION_CHR_UUID = "71ffb137-8b7a-47c9-9a7a-4b1b16662d9a"
 CONFIG_CHR_UUID = "e9f6e626-5fca-4201-b80c-4d2b51c40f51"
@@ -46,15 +50,15 @@ class ClawdBleClient:
         if self._client is not None:
             await self.disconnect()
         while True:
-            logger.info("Scanning for Clawd Tank device...")
+            logger.info("Scanning for %s device...", DEVICE_NAME)
             device = await BleakScanner.find_device_by_name(
-                "Clawd Tank", timeout=SCAN_INTERVAL_SECS
+                DEVICE_NAME, timeout=SCAN_INTERVAL_SECS
             )
             if device is None:
-                logger.debug("Clawd Tank not found, retrying...")
+                logger.debug("%s not found, retrying...", DEVICE_NAME)
                 continue
 
-            logger.info("Found Clawd Tank: %s (%s)", device.name, device.address)
+            logger.info("Found %s: %s (%s)", DEVICE_NAME, device.name, device.address)
             try:
                 client = BleakClient(
                     device,
@@ -63,7 +67,7 @@ class ClawdBleClient:
                 await client.connect()
                 self._client = client
                 self._disconnect_notified = False  # re-arm for this connection
-                logger.info("Connected to Clawd Tank (MTU: %d)", client.mtu_size)
+                logger.info("Connected to %s (MTU: %d)", DEVICE_NAME, client.mtu_size)
                 if self._on_connect_cb:
                     self._on_connect_cb()
                 return
@@ -73,7 +77,7 @@ class ClawdBleClient:
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnect — may be called from a non-event-loop thread."""
-        logger.warning("Disconnected from Clawd Tank")
+        logger.warning("Disconnected from %s", DEVICE_NAME)
         if self._loop is not None and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._clear_client)
             self._loop.call_soon_threadsafe(self._notify_disconnect)

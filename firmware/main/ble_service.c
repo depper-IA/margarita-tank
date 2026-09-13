@@ -325,8 +325,8 @@ static void start_advertising(void) {
     struct ble_hs_adv_fields fields = {0};
 
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (uint8_t *)"Clawd Tank";
-    fields.name_len = 10;
+    fields.name = (uint8_t *)"Margarita";
+    fields.name_len = 9;
     fields.name_is_complete = 1;
     int rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
@@ -380,7 +380,7 @@ static void ble_on_sync(void) {
         ESP_LOGE(TAG, "Failed to ensure address: %d", rc);
         return;
     }
-    ESP_LOGI(TAG, "BLE synced, starting advertising as 'Clawd Tank'");
+    ESP_LOGI(TAG, "BLE synced, starting advertising as 'Margarita'");
     start_advertising();
 }
 
@@ -394,7 +394,7 @@ void ble_service_init(QueueHandle_t evt_queue) {
 
     ESP_ERROR_CHECK(nimble_port_init());
 
-    int rc = ble_svc_gap_device_name_set("Clawd Tank");
+    int rc = ble_svc_gap_device_name_set("Margarita");
     if (rc != 0) {
         ESP_LOGW(TAG, "Failed to set GAP device name: %d", rc);
     }

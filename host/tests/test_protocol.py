@@ -19,7 +19,7 @@ def test_idle_prompt_to_add():
     assert msg is not None
     assert msg["event"] == "add"
     assert msg["session_id"] == "abc-123"
-    assert msg["project"] == "my-project"
+    assert msg["project"] == "Margarita"
     assert msg["message"] == "Claude is waiting for input"
 
 
@@ -111,7 +111,7 @@ def test_empty_session_id_passthrough():
 
 
 def test_missing_cwd_gives_unknown_project():
-    """When cwd is absent the project should fall back to 'unknown'."""
+    """Notification cards use the fixed DISPLAY_NAME regardless of cwd."""
     hook = {
         "hook_event_name": "Notification",
         "notification_type": "idle_prompt",
@@ -120,11 +120,11 @@ def test_missing_cwd_gives_unknown_project():
     }
     msg = hook_payload_to_daemon_message(hook)
     assert msg is not None
-    assert msg["project"] == "unknown"
+    assert msg["project"] == "Margarita"
 
 
-def test_cwd_trailing_slash_gives_project_name():
-    """cwd ending with '/' must still yield the directory name, not ''."""
+def test_cwd_trailing_slash_gives_display_name():
+    """Notification cards always use the fixed DISPLAY_NAME."""
     hook = {
         "hook_event_name": "Notification",
         "notification_type": "idle_prompt",
@@ -133,14 +133,11 @@ def test_cwd_trailing_slash_gives_project_name():
     }
     msg = hook_payload_to_daemon_message(hook)
     assert msg is not None
-    # Should NOT be empty — ideally "my-project"
-    assert msg["project"] != "", (
-        "Trailing slash in cwd causes basename to return '' — project name lost"
-    )
+    assert msg["project"] == "Margarita"
 
 
-def test_cwd_empty_string_gives_unknown_project():
-    """cwd='' (explicit empty string) must fall back to 'unknown'."""
+def test_cwd_empty_string_gives_display_name():
+    """cwd='' (explicit empty string) still yields the fixed DISPLAY_NAME."""
     hook = {
         "hook_event_name": "Notification",
         "notification_type": "idle_prompt",
@@ -150,13 +147,11 @@ def test_cwd_empty_string_gives_unknown_project():
     }
     msg = hook_payload_to_daemon_message(hook)
     assert msg is not None
-    assert msg["project"] == "unknown", (
-        f"Expected 'unknown' for empty cwd, got '{msg['project']}'"
-    )
+    assert msg["project"] == "Margarita"
 
 
 def test_missing_message_field_uses_default():
-    """When message is absent the default 'Waiting for input' must be used."""
+    """When message is absent the default 'Esperando tu respuesta' must be used."""
     hook = {
         "hook_event_name": "Notification",
         "notification_type": "idle_prompt",
@@ -166,7 +161,7 @@ def test_missing_message_field_uses_default():
     }
     msg = hook_payload_to_daemon_message(hook)
     assert msg is not None
-    assert msg["message"] == "Waiting for input"
+    assert msg["message"] == "Esperando tu respuesta"
 
 
 def test_ble_payload_clear_event():
@@ -429,7 +424,7 @@ def test_stop_failure_produces_add_event():
     assert msg["event"] == "add"
     assert msg["hook"] == "StopFailure"
     assert msg["session_id"] == "abc-123"
-    assert msg["project"] == "my-project"
+    assert msg["project"] == "Margarita"
     assert msg["message"] == "Rate limit reached"
 
 
@@ -441,7 +436,7 @@ def test_stop_failure_fallback_message():
     }
     msg = hook_payload_to_daemon_message(hook)
     assert msg is not None
-    assert msg["message"] == "API error"
+    assert msg["message"] == "Error de API"
 
 
 def test_stop_failure_ble_payload_includes_alert():
