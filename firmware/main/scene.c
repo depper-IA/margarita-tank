@@ -51,6 +51,46 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define STAR_TWINKLE_MAX   4000
 #define TRANSPARENT_KEY    0x18C5
 
+/* ---------- Usage top-bar graphical layout (single-row status bar) ---------- */
+#define TOPBAR_H           22    /* height of the dark status strip */
+#define TOPBAR_BG_COLOR    0x11141c
+#define USAGE_BAR_W        34    /* progress bar width in px (compact, single row) */
+#define USAGE_BAR_H        7     /* progress bar height in px */
+#define USAGE_ROW_GAP      5     /* (unused in single-row layout) */
+#define USAGE_TRACK_COLOR  0x2b303b
+#define USAGE_OK_COLOR     0x5bd66f
+#define USAGE_WARN_COLOR   0xe6c34a
+#define USAGE_HIGH_COLOR   0xe0533f
+#define USAGE_TEXT_COLOR   0x9aa4b2
+#define USAGE_SEP_COLOR    0x3a3f4b
+
+/* ---------- Day/night cycle ---------- */
+/* Time is expressed in minutes-since-midnight (hour*60 + minute) so the whole
+ * 24h cycle is a single monotonic axis that is easy to interpolate across. */
+#define DAY_DAWN_START_MIN   (6 * 60)    /* 06:00 — night begins fading to day  */
+#define DAY_DAWN_END_MIN     (9 * 60)    /* 09:00 — full daytime sky            */
+#define DAY_DUSK_START_MIN   (17 * 60)   /* 17:00 — daytime begins fading out   */
+#define DAY_DUSK_END_MIN     (18 * 60)   /* 18:00 — full night sky              */
+#define SUN_SHOW_MIN         (9 * 60)    /* 09:00 — sun appears                  */
+#define SUN_HIDE_MIN         (16 * 60)   /* 16:00 — sun disappears               */
+#define MOON_SHOW_MIN        (21 * 60)   /* 21:00 — moon appears                 */
+/* Moon stays up until dawn (DAY_DAWN_END_MIN) the next morning. */
+#define ASTRO_FADE_MIN       15          /* fade-in/out span for sun & moon (min) */
+
+/* Sky gradient palette (top color, bottom color) for each cycle keyframe. */
+#define SKY_NIGHT_TOP      0x0a0e1a
+#define SKY_NIGHT_BOT      0x1a1a2e
+#define SKY_DAY_TOP        0x4a90d9
+#define SKY_DAY_BOT        0x87b8e8
+#define SKY_DUSK_TOP       0xd98a4a   /* warm orange band (sunset midpoint) */
+#define SKY_DUSK_BOT       0x6a3a5a   /* violet band                        */
+
+#define SUN_COLOR          0xFFD54A
+#define MOON_COLOR         0xE8E8F0
+#define ASTRO_SIZE         22          /* diameter in px of sun / moon disc */
+#define ASTRO_X            290         /* right edge of the 320px scene */
+#define ASTRO_Y            44          /* lowered so it clears the top usage bar */
+
 /* Frame timing in ms per animation */
 #define IDLE_FRAME_MS      (1000 / 6)   /* 167ms @ 6fps */
 #define ALERT_FRAME_MS     (1000 / 10)  /* 100ms @ 10fps */
@@ -329,6 +369,12 @@ struct scene_t {
     /* Stars */
     lv_obj_t *stars[STAR_COUNT];
     uint32_t star_next_toggle[STAR_COUNT];
+    bool stars_visible;   /* day/night gate: stars are hidden during daytime */
+
+    /* Day/night astros */
+    lv_obj_t *sun;
+    lv_obj_t *moon;
+    int daylight_last_min; /* last minute-of-day applied; -1 = never applied */
 
     /* Grass */
     lv_obj_t *grass;
@@ -342,6 +388,23 @@ struct scene_t {
 
     /* Time label */
     lv_obj_t *time_label;
+
+    /* Usage graphical readout: two progress bars (session + weekly) with
+     * percentage labels, plus a reset-countdown label. Laid out to the right
+     * of the clock on the top bar. */
+    lv_obj_t *usage_label;        /* legacy text (kept, unused when bars on) */
+    lv_obj_t *topbar_bg;          /* dark status-bar strip behind the row */
+    lv_obj_t *ampm_label;         /* AM/PM tag (unused in single-row layout) */
+    lv_obj_t *usage_sess_name;    /* "SESION" caption */
+    lv_obj_t *usage_sess_track;   /* session bar background */
+    lv_obj_t *usage_sess_fill;    /* session bar fill */
+    lv_obj_t *usage_sess_pct;     /* session % text */
+    lv_obj_t *usage_week_name;    /* "SEMANA" caption */
+    lv_obj_t *usage_week_track;   /* weekly bar background */
+    lv_obj_t *usage_week_fill;    /* weekly bar fill */
+    lv_obj_t *usage_week_pct;     /* weekly % text */
+    lv_obj_t *usage_reset_lbl;    /* reset countdown text */
+    bool usage_has_data;          /* true once host sent usage */
 
     /* No-connection label */
     lv_obj_t *noconn_label;
@@ -534,6 +597,37 @@ scene_t *scene_create(lv_obj_t *parent)
         lv_obj_set_style_radius(s->stars[i], star_cfg[i].size / 2, 0);
         s->star_next_toggle[i] = now + random_range(STAR_TWINKLE_MIN, STAR_TWINKLE_MAX);
     }
+    s->stars_visible = true;  /* reconciled on the first scene_update_time() */
+
+    /* Sun — daytime disc, upper-right. Starts hidden; the day/night cycle
+     * fades it in/out via scene_apply_daylight(). */
+    s->sun = lv_obj_create(s->container);
+    lv_obj_remove_style_all(s->sun);
+    lv_obj_set_size(s->sun, ASTRO_SIZE, ASTRO_SIZE);
+    lv_obj_set_pos(s->sun, ASTRO_X, ASTRO_Y);
+    lv_obj_set_style_radius(s->sun, ASTRO_SIZE / 2, 0);
+    lv_obj_set_style_bg_opa(s->sun, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s->sun, lv_color_hex(SUN_COLOR), 0);
+    /* Soft glow ring around the sun. */
+    lv_obj_set_style_border_width(s->sun, 2, 0);
+    lv_obj_set_style_border_color(s->sun, lv_color_hex(0xFFE9A0), 0);
+    lv_obj_set_style_border_opa(s->sun, LV_OPA_50, 0);
+    lv_obj_add_flag(s->sun, LV_OBJ_FLAG_HIDDEN);
+
+    /* Moon — nighttime disc, same slot as the sun. */
+    s->moon = lv_obj_create(s->container);
+    lv_obj_remove_style_all(s->moon);
+    lv_obj_set_size(s->moon, ASTRO_SIZE, ASTRO_SIZE);
+    lv_obj_set_pos(s->moon, ASTRO_X, ASTRO_Y);
+    lv_obj_set_style_radius(s->moon, ASTRO_SIZE / 2, 0);
+    lv_obj_set_style_bg_opa(s->moon, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s->moon, lv_color_hex(MOON_COLOR), 0);
+    lv_obj_set_style_border_width(s->moon, 2, 0);
+    lv_obj_set_style_border_color(s->moon, lv_color_hex(0xC8C8E0), 0);
+    lv_obj_set_style_border_opa(s->moon, LV_OPA_40, 0);
+    lv_obj_add_flag(s->moon, LV_OBJ_FLAG_HIDDEN);
+
+    s->daylight_last_min = -1;  /* force first scene_update_time() to apply */
 
     /* Grass strip at bottom */
     s->grass = lv_obj_create(s->container);
@@ -572,20 +666,114 @@ scene_t *scene_create(lv_obj_t *parent)
     s->target_width = 320;
     scene_activate_slot(s, 0, CLAWD_ANIM_IDLE);
 
-    /* Time label — top-right */
+    /* Dark status-bar strip across the top, behind the row (like the PC
+     * widget). Created first so it sits below the text/bars in z-order. */
+    s->topbar_bg = lv_obj_create(s->container);
+    lv_obj_remove_style_all(s->topbar_bg);
+    lv_obj_set_size(s->topbar_bg, lv_pct(100), TOPBAR_H);
+    lv_obj_align(s->topbar_bg, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_opa(s->topbar_bg, LV_OPA_80, 0);
+    lv_obj_set_style_bg_color(s->topbar_bg, lv_color_hex(TOPBAR_BG_COLOR), 0);
+    lv_obj_add_flag(s->topbar_bg, LV_OBJ_FLAG_HIDDEN);
+
+    /* Clock (right side of the strip, like the PC widget). Montserrat. */
     s->time_label = lv_label_create(s->container);
-    lv_obj_set_style_text_font(s->time_label, &clawd_font_clock_24, 0);
-    lv_obj_set_style_text_color(s->time_label, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(s->time_label, LV_ALIGN_TOP_MID, 0, 4);
+    lv_obj_set_style_text_font(s->time_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s->time_label, lv_color_hex(0xe6c34a), 0);
+    lv_obj_align(s->time_label, LV_ALIGN_TOP_LEFT, 8, 10);
     lv_label_set_text(s->time_label, "");
     lv_obj_add_flag(s->time_label, LV_OBJ_FLAG_HIDDEN);
+
+    /* AM/PM tag next to the clock (small). */
+    s->ampm_label = lv_label_create(s->container);
+    lv_obj_set_style_text_font(s->ampm_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s->ampm_label, lv_color_hex(0xc8c8d0), 0);
+    lv_label_set_text(s->ampm_label, "");
+    lv_obj_add_flag(s->ampm_label, LV_OBJ_FLAG_HIDDEN);
+
+    /* Legacy text label — no longer used for display, kept as a hidden stub
+     * so any external reference stays valid. */
+    s->usage_label = lv_label_create(s->container);
+    lv_obj_add_flag(s->usage_label, LV_OBJ_FLAG_HIDDEN);
+
+    /* --- Graphical usage: two progress bars + captions, right of clock --- */
+    s->usage_has_data = false;
+
+    /* Session caption */
+    s->usage_sess_name = lv_label_create(s->container);
+    lv_obj_set_style_text_font(s->usage_sess_name, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s->usage_sess_name, lv_color_hex(USAGE_TEXT_COLOR), 0);
+    lv_label_set_text(s->usage_sess_name, "SESSION");
+    lv_obj_add_flag(s->usage_sess_name, LV_OBJ_FLAG_HIDDEN);
+
+    /* Session row: bar + % */
+    s->usage_sess_track = lv_obj_create(s->container);
+    lv_obj_remove_style_all(s->usage_sess_track);
+    lv_obj_set_size(s->usage_sess_track, USAGE_BAR_W, USAGE_BAR_H);
+    lv_obj_set_style_radius(s->usage_sess_track, USAGE_BAR_H / 2, 0);
+    lv_obj_set_style_bg_opa(s->usage_sess_track, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s->usage_sess_track, lv_color_hex(USAGE_TRACK_COLOR), 0);
+
+    s->usage_sess_fill = lv_obj_create(s->usage_sess_track);
+    lv_obj_remove_style_all(s->usage_sess_fill);
+    lv_obj_set_size(s->usage_sess_fill, 0, USAGE_BAR_H);
+    lv_obj_set_pos(s->usage_sess_fill, 0, 0);
+    lv_obj_set_style_radius(s->usage_sess_fill, USAGE_BAR_H / 2, 0);
+    lv_obj_set_style_bg_opa(s->usage_sess_fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s->usage_sess_fill, lv_color_hex(USAGE_OK_COLOR), 0);
+
+    s->usage_sess_pct = lv_label_create(s->container);
+    lv_obj_set_style_text_font(s->usage_sess_pct, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s->usage_sess_pct, lv_color_hex(0xFFFFFF), 0);
+    lv_label_set_text(s->usage_sess_pct, "");
+
+    /* Weekly caption */
+    s->usage_week_name = lv_label_create(s->container);
+    lv_obj_set_style_text_font(s->usage_week_name, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s->usage_week_name, lv_color_hex(USAGE_TEXT_COLOR), 0);
+    lv_label_set_text(s->usage_week_name, "WEEKLY");
+    lv_obj_add_flag(s->usage_week_name, LV_OBJ_FLAG_HIDDEN);
+
+    /* Weekly row: bar + % */
+    s->usage_week_track = lv_obj_create(s->container);
+    lv_obj_remove_style_all(s->usage_week_track);
+    lv_obj_set_size(s->usage_week_track, USAGE_BAR_W, USAGE_BAR_H);
+    lv_obj_set_style_radius(s->usage_week_track, USAGE_BAR_H / 2, 0);
+    lv_obj_set_style_bg_opa(s->usage_week_track, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s->usage_week_track, lv_color_hex(USAGE_TRACK_COLOR), 0);
+
+    s->usage_week_fill = lv_obj_create(s->usage_week_track);
+    lv_obj_remove_style_all(s->usage_week_fill);
+    lv_obj_set_size(s->usage_week_fill, 0, USAGE_BAR_H);
+    lv_obj_set_pos(s->usage_week_fill, 0, 0);
+    lv_obj_set_style_radius(s->usage_week_fill, USAGE_BAR_H / 2, 0);
+    lv_obj_set_style_bg_opa(s->usage_week_fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s->usage_week_fill, lv_color_hex(USAGE_OK_COLOR), 0);
+
+    s->usage_week_pct = lv_label_create(s->container);
+    lv_obj_set_style_text_font(s->usage_week_pct, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s->usage_week_pct, lv_color_hex(0x9aa4b2), 0);
+    lv_label_set_text(s->usage_week_pct, "");
+
+    /* Reset countdown — small clock-ish label */
+    s->usage_reset_lbl = lv_label_create(s->container);
+    lv_obj_set_style_text_font(s->usage_reset_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s->usage_reset_lbl, lv_color_hex(0x59c2e6), 0);
+    lv_label_set_text(s->usage_reset_lbl, "");
+
+    /* All usage widgets hidden until data + clock visible. */
+    lv_obj_add_flag(s->usage_sess_track, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s->usage_sess_pct, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s->usage_week_track, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s->usage_week_pct, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s->usage_reset_lbl, LV_OBJ_FLAG_HIDDEN);
 
     /* No-connection label — top center */
     s->noconn_label = lv_label_create(s->container);
     lv_obj_set_style_text_font(s->noconn_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s->noconn_label, lv_color_hex(0x556677), 0);
     lv_obj_align(s->noconn_label, LV_ALIGN_TOP_MID, 0, 4);
-    lv_label_set_text(s->noconn_label, "No connection");
+    lv_label_set_text(s->noconn_label, "Desconectado");
     lv_obj_add_flag(s->noconn_label, LV_OBJ_FLAG_HIDDEN);
 
     /* HUD: subagent counter canvas (top-left) — sized for 2x mini-crab (20x14) + text */
@@ -660,8 +848,18 @@ void scene_set_width(scene_t *scene, int width_px, int anim_ms)
             lv_obj_t *child = lv_obj_get_child(scene->container, ci);
             /* Check if this child is a known scene element */
             bool is_known = (child == scene->sky || child == scene->grass ||
-                             child == scene->time_label || child == scene->noconn_label ||
-                             child == scene->hud_canvas);
+                             child == scene->time_label || child == scene->usage_label ||
+                             child == scene->ampm_label ||
+                             child == scene->usage_sess_name ||
+                             child == scene->usage_sess_track ||
+                             child == scene->usage_sess_pct ||
+                             child == scene->usage_week_name ||
+                             child == scene->usage_week_track ||
+                             child == scene->usage_week_pct ||
+                             child == scene->usage_reset_lbl ||
+                             child == scene->noconn_label ||
+                             child == scene->hud_canvas ||
+                             child == scene->sun || child == scene->moon);
             if (!is_known) {
                 for (int si = 0; si < STAR_COUNT && !is_known; si++)
                     if (scene->stars[si] == child) is_known = true;
@@ -822,21 +1020,337 @@ void scene_set_fallback_anim(scene_t *scene, clawd_anim_id_t anim)
     scene->slots[0].fallback_anim = anim;
 }
 
+/* ---------- Day/night cycle ---------- */
+
+/* Linear interpolation between two 0xRRGGBB colors. t is clamped to [0,255]
+ * and used as the weight of color b (0 = all a, 255 = all b). Returns a packed
+ * 0xRRGGBB value so callers can feed it straight to lv_color_hex(). */
+static uint32_t lerp_hex(uint32_t a, uint32_t b, int t)
+{
+    if (t < 0) t = 0;
+    if (t > 255) t = 255;
+    int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+    int br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
+    int r = ar + ((br - ar) * t) / 255;
+    int g = ag + ((bg - ag) * t) / 255;
+    int bl = ab + ((bb - ab) * t) / 255;
+    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)bl;
+}
+
+/* Fade an astro (sun/moon) in/out: fully shown across [show, hide], ramping
+ * its opacity over ASTRO_FADE_MIN at each edge. Outside the window it is
+ * hidden entirely so it never occludes anything. Handles a window that does
+ * NOT wrap midnight (show < hide); the moon's wrap case is handled by the
+ * caller passing an already-unwrapped minute range. */
+static void apply_astro_window(lv_obj_t *astro, int minute, int show, int hide)
+{
+    if (minute < show || minute > hide) {
+        lv_obj_add_flag(astro, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    int opa = 255;
+    int into = minute - show;          /* minutes since it appeared */
+    int left = hide - minute;          /* minutes until it disappears */
+    if (into < ASTRO_FADE_MIN)
+        opa = (into * 255) / ASTRO_FADE_MIN;
+    else if (left < ASTRO_FADE_MIN)
+        opa = (left * 255) / ASTRO_FADE_MIN;
+    lv_obj_clear_flag(astro, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_opa(astro, (lv_opa_t)opa, 0);
+}
+
+/* Recolor the sky gradient and toggle sun/moon/stars for the given local time.
+ * Called once per minute from scene_update_time(). The cycle:
+ *   night → (dawn 06-09) → day → (dusk 17-18) → night
+ * with the day sky peaking blue, dusk passing through a warm band, and the sun
+ * (09-16) and moon (21-06:next-day dawn) fading in over their windows. */
+static void scene_apply_daylight(scene_t *scene, int hour, int minute)
+{
+    int m = hour * 60 + minute;   /* minute of the day, 0..1439 */
+    uint32_t top, bot;
+
+    if (m < DAY_DAWN_START_MIN) {
+        /* Deep night before dawn. */
+        top = SKY_NIGHT_TOP; bot = SKY_NIGHT_BOT;
+    } else if (m < DAY_DAWN_END_MIN) {
+        /* Dawn: night → day over 06:00-09:00. */
+        int t = ((m - DAY_DAWN_START_MIN) * 255) /
+                (DAY_DAWN_END_MIN - DAY_DAWN_START_MIN);
+        top = lerp_hex(SKY_NIGHT_TOP, SKY_DAY_TOP, t);
+        bot = lerp_hex(SKY_NIGHT_BOT, SKY_DAY_BOT, t);
+    } else if (m < DAY_DUSK_START_MIN) {
+        /* Full daytime. */
+        top = SKY_DAY_TOP; bot = SKY_DAY_BOT;
+    } else if (m < DAY_DUSK_END_MIN) {
+        /* Dusk 17:00-18:00: day → warm sunset → night, in two half-steps so
+         * the sky visibly passes through the orange/violet band. */
+        int span = DAY_DUSK_END_MIN - DAY_DUSK_START_MIN;
+        int half = span / 2;
+        int rel = m - DAY_DUSK_START_MIN;
+        if (rel < half) {
+            int t = (rel * 255) / half;                 /* day → dusk */
+            top = lerp_hex(SKY_DAY_TOP, SKY_DUSK_TOP, t);
+            bot = lerp_hex(SKY_DAY_BOT, SKY_DUSK_BOT, t);
+        } else {
+            int t = ((rel - half) * 255) / (span - half); /* dusk → night */
+            top = lerp_hex(SKY_DUSK_TOP, SKY_NIGHT_TOP, t);
+            bot = lerp_hex(SKY_DUSK_BOT, SKY_NIGHT_BOT, t);
+        }
+    } else {
+        /* Night after dusk. */
+        top = SKY_NIGHT_TOP; bot = SKY_NIGHT_BOT;
+    }
+
+    lv_obj_set_style_bg_color(scene->sky, lv_color_hex(top), 0);
+    lv_obj_set_style_bg_grad_color(scene->sky, lv_color_hex(bot), 0);
+
+    /* Sun: simple non-wrapping window 09:00-16:00. */
+    apply_astro_window(scene->sun, m, SUN_SHOW_MIN, SUN_HIDE_MIN);
+
+    /* Moon: 21:00 → next-day dawn (06:00). The window wraps midnight, so split
+     * it into the pre-midnight and post-midnight halves. Fade only happens at
+     * the real 21:00 edge and the 06:00 edge, never at the midnight seam. */
+    if (m >= MOON_SHOW_MIN) {
+        /* Evening half: 21:00..24:00. No "hide" fade before midnight. */
+        apply_astro_window(scene->moon, m, MOON_SHOW_MIN, 24 * 60);
+    } else if (m <= DAY_DAWN_END_MIN) {
+        /* Morning half: 00:00..06:00 (dawn). No "show" fade after midnight. */
+        apply_astro_window(scene->moon, m, 0, DAY_DAWN_END_MIN);
+    } else {
+        lv_obj_add_flag(scene->moon, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    /* Stars only at night — hidden across the full daytime span (dawn end →
+     * dusk start). scene_tick() twinkles them, but respects this gate. */
+    bool night = (m < DAY_DAWN_END_MIN) || (m >= DAY_DUSK_START_MIN);
+    if (night != scene->stars_visible) {
+        scene->stars_visible = night;
+        for (int i = 0; i < STAR_COUNT; i++) {
+            if (night)
+                lv_obj_clear_flag(scene->stars[i], LV_OBJ_FLAG_HIDDEN);
+            else
+                lv_obj_add_flag(scene->stars[i], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
 /* ---------- Time ---------- */
+
+static void scene_layout_topbar(scene_t *scene);
+
+static void usage_widgets_set_hidden(scene_t *scene, bool hidden)
+{
+    lv_obj_t *ws[] = {
+        scene->topbar_bg,
+        scene->usage_sess_name, scene->usage_sess_track, scene->usage_sess_pct,
+        scene->usage_week_name, scene->usage_week_track, scene->usage_week_pct,
+        scene->usage_reset_lbl,
+    };
+    for (size_t i = 0; i < sizeof(ws) / sizeof(ws[0]); i++) {
+        if (!ws[i]) continue;
+        if (hidden) lv_obj_add_flag(ws[i], LV_OBJ_FLAG_HIDDEN);
+        else        lv_obj_clear_flag(ws[i], LV_OBJ_FLAG_HIDDEN);
+    }
+}
 
 void scene_set_time_visible(scene_t *scene, bool visible)
 {
     if (!scene) return;
-    if (visible)
+    if (visible) {
         lv_obj_clear_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
-    else
+        if (scene->usage_has_data)
+            usage_widgets_set_hidden(scene, false);
+        scene_layout_topbar(scene);
+    } else {
         lv_obj_add_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
+        usage_widgets_set_hidden(scene, true);
+    }
+}
+
+/* Lay out the clock on the left and, when usage data exists, two stacked
+ * progress bars (session over weekly) with their % labels to the right, plus
+ * the reset countdown. The whole group is centered horizontally. */
+static void scene_layout_topbar(scene_t *scene)
+{
+    if (!scene || !scene->time_label) return;
+
+    const int gap = 10;    /* clock -> bars */
+    const int pct_gap = 5;  /* bar -> % text */
+    const int top_y = 10;
+
+    lv_obj_update_layout(scene->time_label);
+    int clock_w = lv_obj_get_width(scene->time_label);
+    int clock_h = lv_obj_get_height(scene->time_label);
+
+    bool has_usage = scene->usage_has_data &&
+                     !lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
+
+    /* AM/PM sits under-right of the clock regardless of usage. */
+    lv_obj_update_layout(scene->ampm_label);
+    int ampm_w = lv_obj_get_width(scene->ampm_label);
+
+    if (!has_usage) {
+        int cont_w = lv_obj_get_width(scene->container);
+        int x = (cont_w - clock_w) / 2;
+        if (x < 2) x = 2;
+        lv_obj_align(scene->time_label, LV_ALIGN_TOP_LEFT, x, top_y);
+        lv_obj_align(scene->ampm_label, LV_ALIGN_TOP_LEFT,
+                     x + clock_w + 4, top_y + clock_h - 16);
+        return;
+    }
+
+    /* Measure captions, % labels and reset for the total group width. */
+    lv_obj_update_layout(scene->usage_sess_name);
+    lv_obj_update_layout(scene->usage_week_name);
+    lv_obj_update_layout(scene->usage_sess_pct);
+    lv_obj_update_layout(scene->usage_week_pct);
+    lv_obj_update_layout(scene->usage_reset_lbl);
+
+    int name_w = lv_obj_get_width(scene->usage_sess_name);
+    int wname_w = lv_obj_get_width(scene->usage_week_name);
+    if (wname_w > name_w) name_w = wname_w;
+
+    int pct_w = lv_obj_get_width(scene->usage_sess_pct);
+    int wpct_w = lv_obj_get_width(scene->usage_week_pct);
+    if (wpct_w > pct_w) pct_w = wpct_w;
+
+    int reset_w = lv_obj_get_width(scene->usage_reset_lbl);
+
+    const int name_gap = 5;    /* caption -> bar */
+    const int reset_gap = 14;  /* % -> reset */
+    const int clock_gap = gap + ampm_w + 4;  /* clock (+ampm) -> block */
+
+    /* One row: clock[+ampm] | caption bar % (x2 stacked) | reset */
+    int block_w = name_w + name_gap + USAGE_BAR_W + pct_gap + pct_w;
+    int total = clock_w + clock_gap + block_w + reset_gap + reset_w;
+    int cont_w = lv_obj_get_width(scene->container);
+    int start_x = (cont_w - total) / 2;
+    if (start_x < 2) start_x = 2;
+
+    /* Clock + AM/PM */
+    lv_obj_align(scene->time_label, LV_ALIGN_TOP_LEFT, start_x, top_y);
+    lv_obj_align(scene->ampm_label, LV_ALIGN_TOP_LEFT,
+                 start_x + clock_w + 4, top_y + clock_h - 16);
+
+    /* Stacked rows, vertically centered against the clock. */
+    int rows_h = USAGE_BAR_H * 2 + USAGE_ROW_GAP;
+    int block_x = start_x + clock_w + clock_gap;
+    int row0_y = top_y + (clock_h - rows_h) / 2;
+    if (row0_y < 2) row0_y = 2;
+    int bar_x = block_x + name_w + name_gap;
+    int pct_x = bar_x + USAGE_BAR_W + pct_gap;
+
+    /* Session row (top) */
+    lv_obj_align(scene->usage_sess_name, LV_ALIGN_TOP_LEFT, block_x, row0_y - 3);
+    lv_obj_align(scene->usage_sess_track, LV_ALIGN_TOP_LEFT, bar_x, row0_y);
+    lv_obj_align(scene->usage_sess_pct, LV_ALIGN_TOP_LEFT, pct_x, row0_y - 3);
+
+    /* Weekly row (bottom) */
+    int row1_y = row0_y + USAGE_BAR_H + USAGE_ROW_GAP;
+    lv_obj_align(scene->usage_week_name, LV_ALIGN_TOP_LEFT, block_x, row1_y - 3);
+    lv_obj_align(scene->usage_week_track, LV_ALIGN_TOP_LEFT, bar_x, row1_y);
+    lv_obj_align(scene->usage_week_pct, LV_ALIGN_TOP_LEFT, pct_x, row1_y - 3);
+
+    /* Reset — to the right of the % labels, on the top (session) row so it
+     * stays clear of the astro disc that now sits lower-right. */
+    (void)reset_gap;
+    int reset_x = pct_x + pct_w + 12;
+    /* Clamp so it never overlaps the astro region (x >= ASTRO_X). */
+    lv_obj_update_layout(scene->usage_reset_lbl);
+    int rw = lv_obj_get_width(scene->usage_reset_lbl);
+    if (reset_x + rw > ASTRO_X - 4) reset_x = ASTRO_X - 4 - rw;
+    if (reset_x < pct_x + pct_w + 6) reset_x = pct_x + pct_w + 6;
+    lv_obj_align(scene->usage_reset_lbl, LV_ALIGN_TOP_LEFT, reset_x, row0_y - 3);
+}
+
+static uint32_t usage_color_for(int pct)
+{
+    if (pct >= 80) return USAGE_HIGH_COLOR;
+    if (pct >= 60) return USAGE_WARN_COLOR;
+    return USAGE_OK_COLOR;
 }
 
 void scene_update_time(scene_t *scene, int hour, int minute)
 {
     if (!scene) return;
-    lv_label_set_text_fmt(scene->time_label, "%02d:%02d", hour, minute);
+    /* 12h clock with a small AM/PM tag beside it. */
+    int display_hour = hour % 12;
+    if (display_hour == 0) display_hour = 12;
+    lv_label_set_text_fmt(scene->time_label, "%d:%02d", display_hour, minute);
+    lv_label_set_text(scene->ampm_label, (hour < 12) ? "AM" : "PM");
+    if (!lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN))
+        lv_obj_clear_flag(scene->ampm_label, LV_OBJ_FLAG_HIDDEN);
+    scene_layout_topbar(scene);
+
+    /* Drive the day/night cycle from the same per-minute tick. */
+    int m = hour * 60 + minute;
+    if (m != scene->daylight_last_min) {
+        scene->daylight_last_min = m;
+        scene_apply_daylight(scene, hour, minute);
+    }
+}
+
+void scene_update_usage(scene_t *scene, int session_pct, int weekly_pct,
+                        int reset_seconds)
+{
+    if (!scene) return;
+
+    bool any = (session_pct >= 0) || (weekly_pct >= 0) || (reset_seconds >= 0);
+    scene->usage_has_data = any;
+
+    if (!any) {
+        usage_widgets_set_hidden(scene, true);
+        scene_layout_topbar(scene);
+        return;
+    }
+
+    /* Session bar + label */
+    if (session_pct >= 0) {
+        int p = session_pct > 100 ? 100 : session_pct;
+        int fill = (USAGE_BAR_W * p) / 100;
+        if (fill < 2 && p > 0) fill = 2;
+        lv_obj_set_size(scene->usage_sess_fill, fill, USAGE_BAR_H);
+        lv_obj_set_style_bg_color(scene->usage_sess_fill,
+                                  lv_color_hex(usage_color_for(p)), 0);
+        lv_label_set_text_fmt(scene->usage_sess_pct, "%d%%", session_pct);
+    } else {
+        lv_obj_set_size(scene->usage_sess_fill, 0, USAGE_BAR_H);
+        lv_label_set_text(scene->usage_sess_pct, "--");
+    }
+
+    /* Weekly bar + label */
+    if (weekly_pct >= 0) {
+        int p = weekly_pct > 100 ? 100 : weekly_pct;
+        int fill = (USAGE_BAR_W * p) / 100;
+        if (fill < 2 && p > 0) fill = 2;
+        lv_obj_set_size(scene->usage_week_fill, fill, USAGE_BAR_H);
+        lv_obj_set_style_bg_color(scene->usage_week_fill,
+                                  lv_color_hex(usage_color_for(p)), 0);
+        lv_label_set_text_fmt(scene->usage_week_pct, "%d%%", weekly_pct);
+    } else {
+        lv_obj_set_size(scene->usage_week_fill, 0, USAGE_BAR_H);
+        lv_label_set_text(scene->usage_week_pct, "--");
+    }
+
+    /* Reset countdown — prefixed so its meaning is explicit. */
+    if (reset_seconds >= 0) {
+        int h = reset_seconds / 3600;
+        int m = (reset_seconds % 3600) / 60;
+        if (h > 0)
+            lv_label_set_text_fmt(scene->usage_reset_lbl, "en %dh%02dm", h, m);
+        else
+            lv_label_set_text_fmt(scene->usage_reset_lbl, "en %dm", m);
+    } else {
+        lv_label_set_text(scene->usage_reset_lbl, "");
+    }
+
+    /* Reveal only when the clock is currently shown. */
+    if (!lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN)) {
+        usage_widgets_set_hidden(scene, false);
+        lv_obj_clear_flag(scene->ampm_label, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    scene_layout_topbar(scene);
 }
 
 /* ---------- Tick (call from UI loop) ---------- */
@@ -930,12 +1444,15 @@ void scene_tick(scene_t *scene)
     }
 
     /* Star twinkle */
-    for (int i = 0; i < STAR_COUNT; i++) {
-        if (now >= scene->star_next_toggle[i]) {
-            lv_opa_t cur = lv_obj_get_style_bg_opa(scene->stars[i], 0);
-            lv_opa_t next = (cur > LV_OPA_50) ? LV_OPA_30 : LV_OPA_COVER;
-            lv_obj_set_style_bg_opa(scene->stars[i], next, 0);
-            scene->star_next_toggle[i] = now + random_range(STAR_TWINKLE_MIN, STAR_TWINKLE_MAX);
+    /* Skip twinkle work during daytime when stars are gated off. */
+    if (scene->stars_visible) {
+        for (int i = 0; i < STAR_COUNT; i++) {
+            if (now >= scene->star_next_toggle[i]) {
+                lv_opa_t cur = lv_obj_get_style_bg_opa(scene->stars[i], 0);
+                lv_opa_t next = (cur > LV_OPA_50) ? LV_OPA_30 : LV_OPA_COVER;
+                lv_obj_set_style_bg_opa(scene->stars[i], next, 0);
+                scene->star_next_toggle[i] = now + random_range(STAR_TWINKLE_MIN, STAR_TWINKLE_MAX);
+            }
         }
     }
 

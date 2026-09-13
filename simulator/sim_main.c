@@ -29,6 +29,7 @@ static bool     opt_hidden = false;   /* start with window hidden */
 static bool     opt_bordered = false; /* use a normal bordered window */
 static const char *opt_capture_anim = NULL;  /* status name for --capture-anim */
 static const char *opt_capture_dir = NULL;   /* output dir for --capture-anim */
+static const char *opt_daynight_dir = NULL;  /* output dir for --capture-daynight */
 
 static void print_usage(void)
 {
@@ -87,6 +88,9 @@ static void parse_args(int argc, char *argv[])
         } else if (strcmp(argv[i], "--capture-anim") == 0 && i + 2 < argc) {
             opt_capture_anim = argv[++i];
             opt_capture_dir = argv[++i];
+            opt_headless = true;  /* capture mode is always headless */
+        } else if (strcmp(argv[i], "--capture-daynight") == 0 && i + 1 < argc) {
+            opt_daynight_dir = argv[++i];
             opt_headless = true;  /* capture mode is always headless */
         } else if (strcmp(argv[i], "--listen") == 0) {
             /* Port is optional — check if next arg is a number */
@@ -305,6 +309,52 @@ static void run_capture_anim(void)
 
     printf("[capture] Saved %d frames to %s/\n", frame_count, opt_capture_dir);
     printf("frame_ms=%d\n", frame_ms);  /* machine-readable for the GIF script */
+}
+
+/* ---- Capture day/night cycle mode ---- */
+
+/* Renders the scene at a series of times of day and captures one PNG each,
+ * so the day/night sky cycle (scene_apply_daylight) can be verified visually
+ * without waiting 24h or changing the system clock. Drives the real
+ * production path via scene_update_time(); no firmware code is modified. */
+static void run_capture_daynight(void)
+{
+    sim_screenshot_init(opt_daynight_dir);
+
+    /* Connect and settle into the idle animation so the sky is the subject. */
+    ble_evt_t connect_evt = { .type = BLE_EVT_CONNECTED };
+    ui_manager_handle_event(&connect_evt);
+    ble_evt_t idle_evt = { .type = BLE_EVT_SET_STATUS, .status = DISPLAY_STATUS_IDLE };
+    ui_manager_handle_event(&idle_evt);
+    for (int t = 0; t < 3000; t += TICK_MS) {  /* let the connect oneshot finish */
+        sim_advance_tick(TICK_MS);
+        ui_manager_tick();
+    }
+
+    /* Representative hours across the full cycle. */
+    static const struct { int h, m; } times[] = {
+        {2, 0}, {6, 0}, {7, 30}, {9, 0}, {12, 0}, {15, 0},
+        {16, 0}, {17, 0}, {17, 30}, {18, 0}, {20, 0}, {21, 0}, {23, 0},
+    };
+    scene_t *scene = ui_manager_get_scene();
+
+    for (unsigned i = 0; i < sizeof(times) / sizeof(times[0]); i++) {
+        scene_update_time(scene, times[i].h, times[i].m);
+        /* A couple of ticks so LVGL flushes the new sky colors + astro flags. */
+        ui_manager_tick();
+        sim_advance_tick(TICK_MS);
+        ui_manager_tick();
+
+        char suffix[32];
+        snprintf(suffix, sizeof(suffix), "%02d%02d", times[i].h, times[i].m);
+        sim_screenshot_capture(sim_display_get_framebuffer(),
+                               SIM_LCD_H_RES, SIM_LCD_V_RES,
+                               (uint32_t)i, suffix);
+        printf("[daynight] captured %02d:%02d\n", times[i].h, times[i].m);
+    }
+
+    printf("[daynight] Saved %u frames to %s/\n",
+           (unsigned)(sizeof(times) / sizeof(times[0])), opt_daynight_dir);
 }
 
 /* ---- Window command handler ---- */
@@ -537,6 +587,8 @@ int main(int argc, char *argv[])
     /* 6. Run */
     if (opt_capture_anim) {
         run_capture_anim();
+    } else if (opt_daynight_dir) {
+        run_capture_daynight();
     } else if (opt_headless) {
         run_headless();
     } else {
