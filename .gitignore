@@ -49,6 +49,11 @@ clawd0.png
 # IDE / tooling caches
 firmware/.cache/
 .DS_Store
+.vscode/
+.atl/
+
+# Local preview / scratch scripts (not part of the project)
+simulator/_preview_*.py
 
 # Misc
 firebase-debug.log
