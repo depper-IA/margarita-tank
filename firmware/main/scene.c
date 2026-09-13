@@ -52,16 +52,19 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define TRANSPARENT_KEY    0x18C5
 
 /* ---------- Usage top-bar graphical layout (single-row status bar) ---------- */
-#define TOPBAR_H           22    /* height of the dark status strip */
+#define TOPBAR_W           320   /* status strip width (full scene width)      */
+#define TOPBAR_H           42    /* height of the dark status strip (two rows) */
 #define TOPBAR_BG_COLOR    0x11141c
-#define USAGE_BAR_W        34    /* progress bar width in px (compact, single row) */
-#define USAGE_BAR_H        7     /* progress bar height in px */
-#define USAGE_ROW_GAP      5     /* (unused in single-row layout) */
+#define USAGE_BAR_W        60    /* progress bar width in px */
+#define USAGE_BAR_H        9     /* progress bar height in px */
+#define USAGE_ROW_GAP      5     /* vertical gap between the two rows */
 #define USAGE_TRACK_COLOR  0x2b303b
-#define USAGE_OK_COLOR     0x5bd66f
-#define USAGE_WARN_COLOR   0xe6c34a
-#define USAGE_HIGH_COLOR   0xe0533f
-#define USAGE_TEXT_COLOR   0x9aa4b2
+#define USAGE_OK_COLOR     0x57d977   /* < 40%  : green            */
+#define USAGE_LOW_COLOR    0xa8d84a   /* 40-60% : lime             */
+#define USAGE_WARN_COLOR   0xe6c34a   /* 60-75% : yellow           */
+#define USAGE_MID_COLOR    0xe89545   /* 75-90% : orange           */
+#define USAGE_HIGH_COLOR   0xe0533f   /* > 90%  : red              */
+#define USAGE_TEXT_COLOR   0xf0f2f5   /* near-white for legibility */
 #define USAGE_SEP_COLOR    0x3a3f4b
 
 /* ---------- Day/night cycle ---------- */
@@ -84,6 +87,8 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define SKY_DAY_BOT        0x87b8e8
 #define SKY_DUSK_TOP       0xd98a4a   /* warm orange band (sunset midpoint) */
 #define SKY_DUSK_BOT       0x6a3a5a   /* violet band                        */
+#define SKY_DAWN_TOP       0xe6a35c   /* warm golden band (sunrise midpoint) */
+#define SKY_DAWN_BOT       0x8a5a7a   /* soft pink/violet band               */
 
 #define SUN_COLOR          0xFFD54A
 #define MOON_COLOR         0xE8E8F0
@@ -670,8 +675,14 @@ scene_t *scene_create(lv_obj_t *parent)
      * widget). Created first so it sits below the text/bars in z-order. */
     s->topbar_bg = lv_obj_create(s->container);
     lv_obj_remove_style_all(s->topbar_bg);
-    lv_obj_set_size(s->topbar_bg, lv_pct(100), TOPBAR_H);
-    lv_obj_align(s->topbar_bg, LV_ALIGN_TOP_MID, 0, 0);
+    /* FIXED width + TOP_LEFT at (0,0). Do NOT use lv_pct() width with a
+     * *_MID alignment here: the container width is animated (scene_set_width),
+     * and a percent-width + horizontal-center couple size<->position on the
+     * animated axis, creating an invalidation loop that starves the UI task
+     * (task watchdog reset). A fixed width on the non-animated origin is
+     * stable. */
+    lv_obj_set_size(s->topbar_bg, TOPBAR_W, TOPBAR_H);
+    lv_obj_set_pos(s->topbar_bg, 0, 0);
     lv_obj_set_style_bg_opa(s->topbar_bg, LV_OPA_80, 0);
     lv_obj_set_style_bg_color(s->topbar_bg, lv_color_hex(TOPBAR_BG_COLOR), 0);
     lv_obj_add_flag(s->topbar_bg, LV_OBJ_FLAG_HIDDEN);
@@ -679,7 +690,7 @@ scene_t *scene_create(lv_obj_t *parent)
     /* Clock (right side of the strip, like the PC widget). Montserrat. */
     s->time_label = lv_label_create(s->container);
     lv_obj_set_style_text_font(s->time_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(s->time_label, lv_color_hex(0xe6c34a), 0);
+    lv_obj_set_style_text_color(s->time_label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(s->time_label, LV_ALIGN_TOP_LEFT, 8, 10);
     lv_label_set_text(s->time_label, "");
     lv_obj_add_flag(s->time_label, LV_OBJ_FLAG_HIDDEN);
@@ -752,13 +763,13 @@ scene_t *scene_create(lv_obj_t *parent)
 
     s->usage_week_pct = lv_label_create(s->container);
     lv_obj_set_style_text_font(s->usage_week_pct, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(s->usage_week_pct, lv_color_hex(0x9aa4b2), 0);
+    lv_obj_set_style_text_color(s->usage_week_pct, lv_color_hex(USAGE_TEXT_COLOR), 0);
     lv_label_set_text(s->usage_week_pct, "");
 
-    /* Reset countdown — small clock-ish label */
+    /* Reset caption + value */
     s->usage_reset_lbl = lv_label_create(s->container);
     lv_obj_set_style_text_font(s->usage_reset_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(s->usage_reset_lbl, lv_color_hex(0x59c2e6), 0);
+    lv_obj_set_style_text_color(s->usage_reset_lbl, lv_color_hex(USAGE_TEXT_COLOR), 0);
     lv_label_set_text(s->usage_reset_lbl, "");
 
     /* All usage widgets hidden until data + clock visible. */
@@ -1073,11 +1084,20 @@ static void scene_apply_daylight(scene_t *scene, int hour, int minute)
         /* Deep night before dawn. */
         top = SKY_NIGHT_TOP; bot = SKY_NIGHT_BOT;
     } else if (m < DAY_DAWN_END_MIN) {
-        /* Dawn: night → day over 06:00-09:00. */
-        int t = ((m - DAY_DAWN_START_MIN) * 255) /
-                (DAY_DAWN_END_MIN - DAY_DAWN_START_MIN);
-        top = lerp_hex(SKY_NIGHT_TOP, SKY_DAY_TOP, t);
-        bot = lerp_hex(SKY_NIGHT_BOT, SKY_DAY_BOT, t);
+        /* Dawn 06:00-09:00: night → warm sunrise → day, in two half-steps so
+         * the sky visibly passes through a golden/pink band (mirrors dusk). */
+        int span = DAY_DAWN_END_MIN - DAY_DAWN_START_MIN;
+        int half = span / 2;
+        int rel = m - DAY_DAWN_START_MIN;
+        if (rel < half) {
+            int t = (rel * 255) / half;                     /* night → dawn */
+            top = lerp_hex(SKY_NIGHT_TOP, SKY_DAWN_TOP, t);
+            bot = lerp_hex(SKY_NIGHT_BOT, SKY_DAWN_BOT, t);
+        } else {
+            int t = ((rel - half) * 255) / (span - half);   /* dawn → day */
+            top = lerp_hex(SKY_DAWN_TOP, SKY_DAY_TOP, t);
+            bot = lerp_hex(SKY_DAWN_BOT, SKY_DAY_BOT, t);
+        }
     } else if (m < DAY_DUSK_START_MIN) {
         /* Full daytime. */
         top = SKY_DAY_TOP; bot = SKY_DAY_BOT;
@@ -1158,6 +1178,8 @@ void scene_set_time_visible(scene_t *scene, bool visible)
     if (!scene) return;
     if (visible) {
         lv_obj_clear_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
+        /* Show the dark strip whenever the top bar is visible. */
+        lv_obj_clear_flag(scene->topbar_bg, LV_OBJ_FLAG_HIDDEN);
         if (scene->usage_has_data)
             usage_widgets_set_hidden(scene, false);
         scene_layout_topbar(scene);
@@ -1167,119 +1189,137 @@ void scene_set_time_visible(scene_t *scene, bool visible)
     }
 }
 
-/* Lay out the clock on the left and, when usage data exists, two stacked
- * progress bars (session over weekly) with their % labels to the right, plus
- * the reset countdown. The whole group is centered horizontally. */
+/* Single-row status bar (like the PC widget): a dark strip across the top with
+ * SESSION [bar] %  ·  RESET val  ·  WEEKLY [bar] %  ·  CLOCK, laid out left to
+ * right and vertically centered in the strip. All Montserrat for legibility. */
+
+/* Place a widget at (x, y) top-left. */
+static void topbar_put(lv_obj_t *w, int x, int y)
+{
+    lv_obj_align(w, LV_ALIGN_TOP_LEFT, x, y);
+}
+
+/* Vertically center a widget within a row of height row_h starting at row_y. */
+/* Measure a label's rendered text size WITHOUT forcing a full layout pass.
+ * lv_obj_update_layout() re-enters LVGL's invalidation machinery and, called
+ * repeatedly per frame, can starve the UI task (watchdog reset on hardware).
+ * lv_text_get_size() is a pure measurement and is safe to call every frame. */
+static void label_text_size(lv_obj_t *label, const lv_font_t *font,
+                            int32_t *out_w, int32_t *out_h)
+{
+    const char *txt = lv_label_get_text(label);
+    lv_point_t sz;
+    lv_text_get_size(&sz, txt ? txt : "", font,
+                     0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    *out_w = sz.x;
+    *out_h = sz.y;
+}
+
+/* Two-row status bar (better legibility on the 320x172 hardware):
+ *   Row 1:  SESSION [====] 37%              7:30 AM
+ *   Row 2:  WEEKLY  [====] 61%              RST 54m
+ * Left block = captions + bars + %, right block = clock (row1) / reset (row2).
+ * No lv_obj_update_layout() calls — all sizes are measured with
+ * lv_text_get_size() so this is cheap enough to run every frame. */
 static void scene_layout_topbar(scene_t *scene)
 {
     if (!scene || !scene->time_label) return;
 
-    const int gap = 10;    /* clock -> bars */
-    const int pct_gap = 5;  /* bar -> % text */
-    const int top_y = 10;
-
-    lv_obj_update_layout(scene->time_label);
-    int clock_w = lv_obj_get_width(scene->time_label);
-    int clock_h = lv_obj_get_height(scene->time_label);
+    const lv_font_t *f_lbl = &lv_font_montserrat_12;
+    const lv_font_t *f_clk = &lv_font_montserrat_14;
 
     bool has_usage = scene->usage_has_data &&
                      !lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN);
 
-    /* AM/PM sits under-right of the clock regardless of usage. */
-    lv_obj_update_layout(scene->ampm_label);
-    int ampm_w = lv_obj_get_width(scene->ampm_label);
+    int cont_w = TOPBAR_W;   /* top bar only shown at full scene width */
 
+    int32_t cw, ch;
+    label_text_size(scene->time_label, f_clk, &cw, &ch);
+
+    /* Clock alone (no usage yet): center it on the strip. */
     if (!has_usage) {
-        int cont_w = lv_obj_get_width(scene->container);
-        int x = (cont_w - clock_w) / 2;
-        if (x < 2) x = 2;
-        lv_obj_align(scene->time_label, LV_ALIGN_TOP_LEFT, x, top_y);
-        lv_obj_align(scene->ampm_label, LV_ALIGN_TOP_LEFT,
-                     x + clock_w + 4, top_y + clock_h - 16);
+        topbar_put(scene->time_label, (cont_w - cw) / 2, (TOPBAR_H - ch) / 2);
         return;
     }
 
-    /* Measure captions, % labels and reset for the total group width. */
-    lv_obj_update_layout(scene->usage_sess_name);
-    lv_obj_update_layout(scene->usage_week_name);
-    lv_obj_update_layout(scene->usage_sess_pct);
-    lv_obj_update_layout(scene->usage_week_pct);
-    lv_obj_update_layout(scene->usage_reset_lbl);
+    const int pad = 6;
+    const int gap = 4;   /* caption -> bar -> % within a group */
+    const int row_h = (TOPBAR_H - 2) / 2;
+    const int row0_y = 1;
+    const int row1_y = row0_y + row_h;
 
-    int name_w = lv_obj_get_width(scene->usage_sess_name);
-    int wname_w = lv_obj_get_width(scene->usage_week_name);
-    if (wname_w > name_w) name_w = wname_w;
+    int32_t sname_w, wname_w, spct_w, wpct_w, reset_w, lh;
+    label_text_size(scene->usage_sess_name, f_lbl, &sname_w, &lh);
+    label_text_size(scene->usage_week_name, f_lbl, &wname_w, &lh);
+    label_text_size(scene->usage_sess_pct, f_lbl, &spct_w, &lh);
+    label_text_size(scene->usage_week_pct, f_lbl, &wpct_w, &lh);
+    label_text_size(scene->usage_reset_lbl, f_lbl, &reset_w, &lh);
 
-    int pct_w = lv_obj_get_width(scene->usage_sess_pct);
-    int wpct_w = lv_obj_get_width(scene->usage_week_pct);
-    if (wpct_w > pct_w) pct_w = wpct_w;
+    /* Vertical centering offsets (constant per font/element). */
+    int lbl_y0 = row0_y + (row_h - lh) / 2;
+    int lbl_y1 = row1_y + (row_h - lh) / 2;
+    int bar_y0 = row0_y + (row_h - USAGE_BAR_H) / 2;
+    int bar_y1 = row1_y + (row_h - USAGE_BAR_H) / 2;
+    if (lbl_y0 < 0) lbl_y0 = 0;
+    if (bar_y0 < 0) bar_y0 = 0;
 
-    int reset_w = lv_obj_get_width(scene->usage_reset_lbl);
+    int name_col = (sname_w > wname_w) ? sname_w : wname_w;
+    int bar_x = pad + name_col + gap;
+    int pct_x = bar_x + USAGE_BAR_W + gap;
 
-    const int name_gap = 5;    /* caption -> bar */
-    const int reset_gap = 14;  /* % -> reset */
-    const int clock_gap = gap + ampm_w + 4;  /* clock (+ampm) -> block */
+    /* Row 1: SESSION */
+    topbar_put(scene->usage_sess_name, pad, lbl_y0);
+    topbar_put(scene->usage_sess_track, bar_x, bar_y0);
+    topbar_put(scene->usage_sess_pct, pct_x, lbl_y0);
 
-    /* One row: clock[+ampm] | caption bar % (x2 stacked) | reset */
-    int block_w = name_w + name_gap + USAGE_BAR_W + pct_gap + pct_w;
-    int total = clock_w + clock_gap + block_w + reset_gap + reset_w;
-    int cont_w = lv_obj_get_width(scene->container);
-    int start_x = (cont_w - total) / 2;
-    if (start_x < 2) start_x = 2;
+    /* Row 2: WEEKLY */
+    topbar_put(scene->usage_week_name, pad, lbl_y1);
+    topbar_put(scene->usage_week_track, bar_x, bar_y1);
+    topbar_put(scene->usage_week_pct, pct_x, lbl_y1);
 
-    /* Clock + AM/PM */
-    lv_obj_align(scene->time_label, LV_ALIGN_TOP_LEFT, start_x, top_y);
-    lv_obj_align(scene->ampm_label, LV_ALIGN_TOP_LEFT,
-                 start_x + clock_w + 4, top_y + clock_h - 16);
-
-    /* Stacked rows, vertically centered against the clock. */
-    int rows_h = USAGE_BAR_H * 2 + USAGE_ROW_GAP;
-    int block_x = start_x + clock_w + clock_gap;
-    int row0_y = top_y + (clock_h - rows_h) / 2;
-    if (row0_y < 2) row0_y = 2;
-    int bar_x = block_x + name_w + name_gap;
-    int pct_x = bar_x + USAGE_BAR_W + pct_gap;
-
-    /* Session row (top) */
-    lv_obj_align(scene->usage_sess_name, LV_ALIGN_TOP_LEFT, block_x, row0_y - 3);
-    lv_obj_align(scene->usage_sess_track, LV_ALIGN_TOP_LEFT, bar_x, row0_y);
-    lv_obj_align(scene->usage_sess_pct, LV_ALIGN_TOP_LEFT, pct_x, row0_y - 3);
-
-    /* Weekly row (bottom) */
-    int row1_y = row0_y + USAGE_BAR_H + USAGE_ROW_GAP;
-    lv_obj_align(scene->usage_week_name, LV_ALIGN_TOP_LEFT, block_x, row1_y - 3);
-    lv_obj_align(scene->usage_week_track, LV_ALIGN_TOP_LEFT, bar_x, row1_y);
-    lv_obj_align(scene->usage_week_pct, LV_ALIGN_TOP_LEFT, pct_x, row1_y - 3);
-
-    /* Reset — to the right of the % labels, on the top (session) row so it
-     * stays clear of the astro disc that now sits lower-right. */
-    (void)reset_gap;
-    int reset_x = pct_x + pct_w + 12;
-    /* Clamp so it never overlaps the astro region (x >= ASTRO_X). */
-    lv_obj_update_layout(scene->usage_reset_lbl);
-    int rw = lv_obj_get_width(scene->usage_reset_lbl);
-    if (reset_x + rw > ASTRO_X - 4) reset_x = ASTRO_X - 4 - rw;
-    if (reset_x < pct_x + pct_w + 6) reset_x = pct_x + pct_w + 6;
-    lv_obj_align(scene->usage_reset_lbl, LV_ALIGN_TOP_LEFT, reset_x, row0_y - 3);
+    /* Right block: clock on row 1, reset on row 2, both right-aligned. */
+    int clock_y = row0_y + (row_h - ch) / 2;
+    if (clock_y < 0) clock_y = 0;
+    topbar_put(scene->time_label, cont_w - cw - pad, clock_y);
+    topbar_put(scene->usage_reset_lbl, cont_w - reset_w - pad, lbl_y1);
 }
 
+/* Bar color escalates as the bar fills: green -> lime -> yellow -> orange ->
+ * red, so the fill color itself signals how full the usage is. */
 static uint32_t usage_color_for(int pct)
 {
-    if (pct >= 80) return USAGE_HIGH_COLOR;
+    if (pct >= 90) return USAGE_HIGH_COLOR;
+    if (pct >= 75) return USAGE_MID_COLOR;
     if (pct >= 60) return USAGE_WARN_COLOR;
+    if (pct >= 40) return USAGE_LOW_COLOR;
     return USAGE_OK_COLOR;
 }
 
 void scene_update_time(scene_t *scene, int hour, int minute)
 {
     if (!scene) return;
-    /* 12h clock with a small AM/PM tag beside it. */
-    int display_hour = hour % 12;
-    if (display_hour == 0) display_hour = 12;
-    lv_label_set_text_fmt(scene->time_label, "%d:%02d", display_hour, minute);
-    lv_label_set_text(scene->ampm_label, (hour < 12) ? "AM" : "PM");
-    if (!lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN))
-        lv_obj_clear_flag(scene->ampm_label, LV_OBJ_FLAG_HIDDEN);
+
+#ifdef SIMULATOR
+    /* Preview-only: force a fixed hour via CLAWD_FORCE_HOUR / CLAWD_FORCE_MIN
+     * so day/night backgrounds can be demoed regardless of the host clock.
+     * Never compiled into firmware. */
+    {
+        const char *fh = getenv("CLAWD_FORCE_HOUR");
+        if (fh && *fh) {
+            hour = atoi(fh);
+            const char *fm = getenv("CLAWD_FORCE_MIN");
+            minute = (fm && *fm) ? atoi(fm) : 0;
+        }
+    }
+#endif
+
+    /* 12h clock with AM/PM so morning vs afternoon is unambiguous. */
+    {
+        int h12 = hour % 12;
+        if (h12 == 0) h12 = 12;
+        const char *ap = (hour < 12) ? "AM" : "PM";
+        lv_label_set_text_fmt(scene->time_label, "%d:%02d %s", h12, minute, ap);
+    }
     scene_layout_topbar(scene);
 
     /* Drive the day/night cycle from the same per-minute tick. */
@@ -1332,22 +1372,21 @@ void scene_update_usage(scene_t *scene, int session_pct, int weekly_pct,
         lv_label_set_text(scene->usage_week_pct, "--");
     }
 
-    /* Reset countdown — prefixed so its meaning is explicit. */
+    /* Reset countdown — "RESET" caption + value, like the PC widget. */
     if (reset_seconds >= 0) {
         int h = reset_seconds / 3600;
         int m = (reset_seconds % 3600) / 60;
         if (h > 0)
-            lv_label_set_text_fmt(scene->usage_reset_lbl, "en %dh%02dm", h, m);
+            lv_label_set_text_fmt(scene->usage_reset_lbl, "RST %dh%02dm", h, m);
         else
-            lv_label_set_text_fmt(scene->usage_reset_lbl, "en %dm", m);
+            lv_label_set_text_fmt(scene->usage_reset_lbl, "RST %dm", m);
     } else {
-        lv_label_set_text(scene->usage_reset_lbl, "");
+        lv_label_set_text(scene->usage_reset_lbl, "RST --");
     }
 
     /* Reveal only when the clock is currently shown. */
     if (!lv_obj_has_flag(scene->time_label, LV_OBJ_FLAG_HIDDEN)) {
         usage_widgets_set_hidden(scene, false);
-        lv_obj_clear_flag(scene->ampm_label, LV_OBJ_FLAG_HIDDEN);
     }
 
     scene_layout_topbar(scene);

@@ -27,6 +27,7 @@ typedef enum {
     BLE_EVT_NOTIF_CLEAR,
     BLE_EVT_SET_STATUS,
     BLE_EVT_SET_SESSIONS,
+    BLE_EVT_SET_USAGE,
     BLE_EVT_CONNECTED,
     BLE_EVT_DISCONNECTED,
 } ble_evt_type_t;
@@ -44,6 +45,10 @@ typedef struct {
     uint8_t subagent_count;
     uint8_t session_overflow;
     uint8_t alert;  /* 0=none, 1=error */
+    /* set_usage data (BLE_EVT_SET_USAGE) */
+    int16_t usage_session_pct;   /* 5h window used %, -1 = unknown */
+    int16_t usage_weekly_pct;    /* 7d window used %, -1 = unknown */
+    int32_t usage_reset_s;       /* seconds until 5h reset, -1 = unknown */
 } ble_evt_t;
 
 // Initialize NimBLE stack and GATT server.

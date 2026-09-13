@@ -200,6 +200,65 @@ def daemon_message_to_ble_payload(msg: dict) -> Optional[str]:
     raise ValueError(f"Unknown event: {event}")
 
 
+def usage_to_ble_payload(
+    session_pct: Optional[int],
+    weekly_pct: Optional[int],
+    reset_seconds: Optional[int],
+) -> str:
+    """Build a set_usage payload. Unknown fields are sent as -1 so the
+    firmware/simulator can omit them from the display."""
+    return json.dumps({
+        "action": "set_usage",
+        "session_pct": session_pct if session_pct is not None else -1,
+        "weekly_pct": weekly_pct if weekly_pct is not None else -1,
+        "reset_s": reset_seconds if reset_seconds is not None else -1,
+    })
+
+
+def read_usage_from_cache(cache_path: str) -> Optional[dict]:
+    """Read the statusline cache written by the bridge and extract usage.
+
+    Returns a dict {session_pct, weekly_pct, reset_seconds} with None for any
+    missing field, or None if the cache is unreadable / has no rate_limits.
+    """
+    try:
+        with open(cache_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+    rl = data.get("rate_limits") or {}
+    five = rl.get("five_hour") or {}
+    seven = rl.get("seven_day") or {}
+    if not five and not seven:
+        return None
+
+    def as_int(v):
+        try:
+            return int(round(float(v)))
+        except (TypeError, ValueError):
+            return None
+
+    session_pct = as_int(five.get("used_percentage"))
+    weekly_pct = as_int(seven.get("used_percentage"))
+
+    reset_seconds = None
+    resets_at = five.get("resets_at")
+    if resets_at is not None:
+        import time as _time
+        try:
+            remaining = int(resets_at) - int(_time.time())
+            reset_seconds = max(0, remaining)
+        except (TypeError, ValueError):
+            reset_seconds = None
+
+    return {
+        "session_pct": session_pct,
+        "weekly_pct": weekly_pct,
+        "reset_seconds": reset_seconds,
+    }
+
+
 def display_state_to_ble_payload(state: dict) -> str:
     """Convert display state dict to v2 JSON payload."""
     if "status" in state:

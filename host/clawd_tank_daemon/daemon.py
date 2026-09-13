@@ -17,6 +17,8 @@ from .protocol import (
     daemon_message_to_ble_payload,
     display_state_to_ble_payload,
     display_state_to_v1_payload,
+    read_usage_from_cache,
+    usage_to_ble_payload,
 )
 from .sim_client import SimClient, SIM_DEFAULT_PORT
 from .socket_server import SocketServer
@@ -50,6 +52,10 @@ def _tool_to_anim(tool_name: str) -> str:
 
 PID_PATH = Path.home() / ".clawd-tank" / "daemon.pid"
 LOCK_PATH = Path.home() / ".clawd-tank" / "daemon.lock"
+# Cache written by statusline_bridge.py holding Claude Code's rate_limits.
+USAGE_CACHE_PATH = str(Path.home() / ".clawd-tank" / "statusline-cache.json")
+# How often to poll the usage cache and push set_usage to transports.
+USAGE_POLL_INTERVAL_SECS = 15.0
 PID_DEDUP_FRESHNESS_SECONDS = 60.0
 # How often to actively probe BLE links for liveness. macOS CoreBluetooth often
 # never reports range/sleep disconnects, so without this probe a dead link is
@@ -150,6 +156,7 @@ class ClawdDaemon:
         self._sender_tasks: dict[str, asyncio.Task] = {}
         self._socket = SocketServer(on_message=self._handle_message)
         self._active_notifications: dict[str, dict] = {}
+        self._last_usage_key: Optional[tuple] = None
         self._running = True
         self._shutdown_event = asyncio.Event()
         self._lock_fd: int | None = None
@@ -509,6 +516,41 @@ class ClawdDaemon:
                     payload = display_state_to_v1_payload(new_state)
                 await transport.write_notification(payload)
 
+    async def _broadcast_usage(self) -> None:
+        """Read the usage cache and push a set_usage payload to all connected
+        transports. Only sends when the values change to avoid redundant writes."""
+        usage = read_usage_from_cache(USAGE_CACHE_PATH)
+        if usage is None:
+            return
+        payload = usage_to_ble_payload(
+            usage.get("session_pct"),
+            usage.get("weekly_pct"),
+            usage.get("reset_seconds"),
+        )
+        # Skip identical resend (reset_seconds shifts slowly so compare on a
+        # coarse key: pcts + minute-rounded reset).
+        session_pct = usage.get("session_pct")
+        weekly_pct = usage.get("weekly_pct")
+        reset_s = usage.get("reset_seconds")
+        reset_min = reset_s // 60 if isinstance(reset_s, int) else None
+        key = (session_pct, weekly_pct, reset_min)
+        if key == self._last_usage_key:
+            return
+        self._last_usage_key = key
+
+        for name, transport in self._transports.items():
+            if transport.is_connected:
+                try:
+                    await transport.write_notification(payload)
+                except Exception:
+                    logger.exception("Failed to send usage to '%s'", name)
+
+    async def _usage_checker(self) -> None:
+        """Async task: periodically poll the usage cache and broadcast it."""
+        while self._running:
+            await asyncio.sleep(USAGE_POLL_INTERVAL_SECS)
+            await self._broadcast_usage()
+
     async def _staleness_checker(self) -> None:
         while self._running:
             await asyncio.sleep(30)
@@ -625,6 +667,10 @@ class ClawdDaemon:
                 self._transport_versions[name] = 1
                 logger.warning("Transport '%s': version read failed, defaulting to v1", name)
         await self._replay_active_for(transport, name)
+        # Push current usage right away so the new connection shows it without
+        # waiting for the next poll tick. Reset the dedup key so it always sends.
+        self._last_usage_key = None
+        await self._broadcast_usage()
 
     async def _replay_active_for(self, transport, name: str = "") -> None:
         """Replay all active notifications to a transport after reconnect."""
@@ -711,6 +757,13 @@ class ClawdDaemon:
             self._liveness_task.cancel()
             try:
                 await self._liveness_task
+            except asyncio.CancelledError:
+                pass
+
+        if hasattr(self, '_usage_task'):
+            self._usage_task.cancel()
+            try:
+                await self._usage_task
             except asyncio.CancelledError:
                 pass
 
@@ -834,6 +887,7 @@ class ClawdDaemon:
         self._staleness_task = asyncio.create_task(self._staleness_checker())
         self._liveness_task = asyncio.create_task(self._liveness_checker())
         self._ble_liveness_task = asyncio.create_task(self._ble_liveness_checker())
+        self._usage_task = asyncio.create_task(self._usage_checker())
 
         await self._shutdown_event.wait()
         logger.info("Daemon run() finished")

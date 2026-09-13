@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
+#include <inttypes.h>
 
 static const char *TAG = "ui";
 
@@ -291,6 +292,13 @@ void ui_manager_handle_event(const ble_evt_t *evt)
         s_last_activity_tick = lv_tick_get();
         break;
     }
+
+    case BLE_EVT_SET_USAGE:
+        ESP_LOGI(TAG, "Set usage: session=%d%% weekly=%d%% reset=%" PRId32 "s",
+                 evt->usage_session_pct, evt->usage_weekly_pct, evt->usage_reset_s);
+        scene_update_usage(s_scene, evt->usage_session_pct,
+                           evt->usage_weekly_pct, evt->usage_reset_s);
+        break;
     }
 
     _lock_release(&s_lock);

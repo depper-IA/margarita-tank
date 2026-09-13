@@ -149,6 +149,14 @@ int sim_ble_parse_json(const char *buf, uint16_t len, ble_evt_t *out) {
             out->session_ids[out->session_anim_count] = (uint16_t)id->valueint;
             out->session_anim_count++;
         }
+    } else if (strcmp(action->valuestring, "set_usage") == 0) {
+        out->type = BLE_EVT_SET_USAGE;
+        cJSON *sp = cJSON_GetObjectItem(json, "session_pct");
+        cJSON *wp = cJSON_GetObjectItem(json, "weekly_pct");
+        cJSON *rs = cJSON_GetObjectItem(json, "reset_s");
+        out->usage_session_pct = (sp && cJSON_IsNumber(sp)) ? (int16_t)sp->valueint : -1;
+        out->usage_weekly_pct = (wp && cJSON_IsNumber(wp)) ? (int16_t)wp->valueint : -1;
+        out->usage_reset_s = (rs && cJSON_IsNumber(rs)) ? (int32_t)rs->valuedouble : -1;
     } else if (strcmp(action->valuestring, "write_config") == 0 ||
                strcmp(action->valuestring, "read_config") == 0) {
         cJSON_Delete(json);

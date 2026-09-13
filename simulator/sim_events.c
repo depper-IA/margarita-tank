@@ -123,6 +123,16 @@ void sim_events_init_inline(const char *events_str)
                 cJSON_Delete(json);
             }
         }
+        else if (strncmp(p, "usage", 5) == 0) {
+            /* usage <session_pct> <weekly_pct> <reset_seconds>  (use -1 for unknown) */
+            p += 5;
+            char *end = NULL;
+            ble_evt_t evt = { .type = BLE_EVT_SET_USAGE };
+            evt.usage_session_pct = (int16_t)strtol(p, &end, 10); p = end;
+            evt.usage_weekly_pct = (int16_t)strtol(p, &end, 10); p = end;
+            evt.usage_reset_s = (int32_t)strtol(p, &end, 10); p = end;
+            add_event(current_time, &evt, "usage");
+        }
         else if (strncmp(p, "status", 6) == 0) {
             p += 6;
             char status_str[32];

@@ -185,6 +185,14 @@ static void parse_notification_json(const char *buf, uint16_t len) {
             evt.session_ids[evt.session_anim_count] = (uint16_t)id->valueint;
             evt.session_anim_count++;
         }
+    } else if (strcmp(action->valuestring, "set_usage") == 0) {
+        evt.type = BLE_EVT_SET_USAGE;
+        cJSON *sp = cJSON_GetObjectItem(json, "session_pct");
+        cJSON *wp = cJSON_GetObjectItem(json, "weekly_pct");
+        cJSON *rs = cJSON_GetObjectItem(json, "reset_s");
+        evt.usage_session_pct = (sp && cJSON_IsNumber(sp)) ? (int16_t)sp->valueint : -1;
+        evt.usage_weekly_pct = (wp && cJSON_IsNumber(wp)) ? (int16_t)wp->valueint : -1;
+        evt.usage_reset_s = (rs && cJSON_IsNumber(rs)) ? (int32_t)rs->valuedouble : -1;
     } else {
         ESP_LOGW(TAG, "Unknown action '%s', ignoring", action->valuestring);
         cJSON_Delete(json);
