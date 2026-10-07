@@ -333,3 +333,60 @@ def test_install_preserves_non_ascii_user_settings(settings_path):
     install_hooks()
     written = json.loads(settings_path.read_text(encoding="utf-8"))
     assert written["statusLine"] == _NON_ASCII_SETTINGS["statusLine"]
+
+
+# --- Never clobber a settings file we cannot parse ----------------------------
+
+
+def test_install_reads_settings_saved_with_utf8_bom(settings_path):
+    """Windows editors (Notepad) may prepend a UTF-8 BOM; it must not count as invalid."""
+    settings_path.write_bytes(b"\xef\xbb\xbf" + json.dumps({"model": "opus"}).encode("utf-8"))
+    assert install_hooks() is True
+    written = _read(settings_path)
+    assert written["model"] == "opus"
+    assert any(HOOK_COMMAND in c for c in _commands_for(written, "SessionStart"))
+
+
+@pytest.mark.parametrize("raw", [
+    b'{"model": "opus",}',             # invalid JSON (trailing comma)
+    b'["not", "an", "object"]',        # valid JSON, wrong shape
+    b'{"model": "\xff\xfe opus"}',     # not decodable as UTF-8
+])
+def test_install_leaves_unparseable_settings_untouched(settings_path, raw):
+    settings_path.write_bytes(raw)
+    assert install_hooks() is False
+    assert settings_path.read_bytes() == raw
+
+
+def test_are_hooks_installed_false_on_undecodable_settings(settings_path):
+    settings_path.write_bytes(b'{"model": "\xff\xfe"}')
+    assert are_hooks_installed() is False  # must not raise
+
+
+@pytest.mark.parametrize("raw", [b"", b"  \n"])
+def test_install_treats_empty_settings_file_as_empty_object(settings_path, raw):
+    settings_path.write_bytes(raw)
+    assert install_hooks() is True
+    assert any(HOOK_COMMAND in c for c in _commands_for(_read(settings_path), "SessionStart"))
+
+
+def test_install_writes_through_a_symlinked_settings_file(settings_path, tmp_path):
+    target = tmp_path / "dotfiles" / "settings.json"
+    target.parent.mkdir()
+    target.write_text(json.dumps({"model": "opus"}), encoding="utf-8")
+    try:
+        settings_path.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not permitted on this system")
+    assert install_hooks() is True
+    assert settings_path.is_symlink()
+    assert json.loads(target.read_text(encoding="utf-8"))["model"] == "opus"
+    assert any(HOOK_COMMAND in c for c in _commands_for(_read(target), "SessionStart"))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_install_preserves_settings_file_mode(settings_path):
+    settings_path.write_text("{}", encoding="utf-8")
+    settings_path.chmod(0o644)
+    install_hooks()
+    assert settings_path.stat().st_mode & 0o777 == 0o644

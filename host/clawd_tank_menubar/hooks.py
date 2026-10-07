@@ -8,6 +8,7 @@ import os
 import re
 import stat
 import sys
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -376,6 +377,44 @@ def _our_hook_present(existing_entries, our_matcher) -> bool:
     return False
 
 
+def _load_settings() -> dict | None:
+    """Parse the Claude settings file. Returns {} when it does not exist and None
+    when it exists but cannot be read, decoded or parsed into a JSON object.
+
+    Read as utf-8-sig so a BOM left by a Windows editor is not treated as invalid.
+    """
+    if not CLAUDE_SETTINGS_PATH.exists():
+        return {}
+    try:
+        text = CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8-sig")
+        if not text.strip():
+            return {}  # an empty file holds no user settings to protect
+        settings = json.loads(text)
+    except (ValueError, OSError):  # JSONDecodeError and UnicodeDecodeError are ValueErrors
+        return None
+    return settings if isinstance(settings, dict) else None
+
+
+def _write_settings_atomic(settings: dict) -> None:
+    """Write via a temp file + os.replace so a crash mid-write never truncates
+    the user's settings. Replaces the symlink target (not the link itself) and
+    keeps the existing file's permission bits."""
+    target = CLAUDE_SETTINGS_PATH.resolve()
+    fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(settings, indent=2, ensure_ascii=False) + "\n")
+        if target.exists():
+            os.chmod(tmp_path, stat.S_IMODE(target.stat().st_mode))
+        os.replace(tmp_path, target)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def are_hooks_installed() -> bool:
     """True only if every Clawd Tank hook (event + matcher) is already registered.
 
@@ -383,13 +422,8 @@ def are_hooks_installed() -> bool:
     (e.g. a new matcher we started requiring) counts as NOT installed, so the
     menu bar app treats it as outdated and re-runs install_hooks().
     """
-    if not CLAUDE_SETTINGS_PATH.exists():
-        return False
-    try:
-        settings = json.loads(CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return False
-    if not isinstance(settings, dict):
+    settings = _load_settings()
+    if not settings:
         return False
     hooks = settings.get("hooks", {})
     if not isinstance(hooks, dict):
@@ -415,19 +449,20 @@ def install_hooks() -> bool:
     own hooks. For each managed event we drop our OWN prior groups (so a changed
     matcher self-heals instead of leaving a stale duplicate), then append the current
     config only where it isn't already present. The user's groups — and any group the
-    user shares with us — are never modified or removed. Idempotent. Returns True.
+    user shares with us — are never modified or removed. Idempotent.
+
+    Returns False — leaving the file untouched — when an existing settings file
+    cannot be parsed, since rewriting it would discard the user's settings.
     """
     CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    if CLAUDE_SETTINGS_PATH.exists():
-        try:
-            settings = json.loads(CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            settings = {}
-    else:
-        settings = {}
-    if not isinstance(settings, dict):
-        settings = {}
+    settings = _load_settings()
+    if settings is None:
+        logger.warning(
+            "Not installing hooks: %s is not a readable JSON object; left untouched",
+            CLAUDE_SETTINGS_PATH,
+        )
+        return False
 
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
@@ -446,8 +481,6 @@ def install_hooks() -> bool:
                 kept.append(copy.deepcopy(our_entry))
         hooks[event_name] = kept
 
-    CLAUDE_SETTINGS_PATH.write_text(
-        json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    _write_settings_atomic(settings)
     logger.info("Installed hooks in %s", CLAUDE_SETTINGS_PATH)
     return True

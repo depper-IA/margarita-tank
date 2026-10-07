@@ -384,7 +384,16 @@ class ClawdTankController(DaemonObserver):
     def install_hooks(self) -> None:
         was_installed = hooks.are_hooks_installed()
         hooks.install_notify_script()
-        hooks.install_hooks()
+        if not hooks.install_hooks():
+            self._view.alert(
+                title="Hooks Not Installed",
+                message=(
+                    "~/.claude/settings.json could not be parsed, so it was left "
+                    "untouched. Fix the file and try again."
+                ),
+            )
+            self._render()
+            return
         self._hooks_installed = True
         if was_installed:
             self._view.alert(

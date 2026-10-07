@@ -491,3 +491,19 @@ def test_toggle_preserves_other_preference_keys(prefs_path):
     # read-modify-write against the file, not a mock of preferences.py).
     assert "ble_enabled" in prefs
     assert "sim_always_on_top" in prefs
+
+
+def test_install_hooks_alerts_failure_when_settings_unparseable(prefs_path, tmp_path, monkeypatch):
+    settings_path = tmp_path / "claude-settings.json"
+    settings_path.write_text('{"model": "opus",}', encoding="utf-8")
+    notify_dir = tmp_path / "clawd-dir"
+    monkeypatch.setattr(hooks, "CLAUDE_SETTINGS_PATH", settings_path)
+    monkeypatch.setattr(hooks, "CLAWD_DIR", notify_dir)
+    monkeypatch.setattr(hooks, "NOTIFY_SCRIPT_PATH", notify_dir / "clawd-tank-notify")
+
+    controller, view = make_controller(prefs_path)
+    controller.install_hooks()
+
+    assert settings_path.read_text(encoding="utf-8") == '{"model": "opus",}'
+    assert controller._hooks_installed is False
+    assert view.alerts[0][0] == "Hooks Not Installed"
