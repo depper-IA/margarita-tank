@@ -316,6 +316,104 @@ def test_windows_command_names_the_interpreter_and_a_py_file():
     assert HOOK_COMMAND == f'"{sys.executable}" "{hooks.NOTIFY_SCRIPT_PATH}"'
 
 
+# --- Windows packaged build: sys.executable is the tray exe, not Python ------
+
+
+_FROZEN_TRAY = "C:\\Users\\me\\AppData\\Local\\Programs\\Margarita Tank\\MargaritaTank.exe"
+_FROZEN_NOTIFY = "C:\\Users\\me\\AppData\\Local\\Programs\\Margarita Tank\\margarita-notify.exe"
+
+
+def test_frozen_windows_command_runs_the_bundled_notify_exe():
+    """In a PyInstaller build sys.executable is the tray app itself: naming it as
+    the 'interpreter' would launch a second tray instance on every hook. The
+    command must run the console notify exe shipped next to it instead."""
+    cmd = hooks.build_hook_command(
+        platform="win32", frozen=True, executable=_FROZEN_TRAY,
+        script_path=hooks.NOTIFY_SCRIPT_PATH,
+    )
+    assert cmd == f'"{_FROZEN_NOTIFY}"'
+
+
+def test_unfrozen_windows_command_names_interpreter_and_script():
+    cmd = hooks.build_hook_command(
+        platform="win32", frozen=False, executable="C:\\py\\python.exe",
+        script_path="C:\\Users\\me\\.clawd-tank\\clawd-tank-notify.py",
+    )
+    assert cmd == '"C:\\py\\python.exe" "C:\\Users\\me\\.clawd-tank\\clawd-tank-notify.py"'
+
+
+def test_posix_command_is_the_script_path_even_when_frozen():
+    cmd = hooks.build_hook_command(
+        platform="darwin", frozen=True, executable="/Applications/X.app/Contents/MacOS/X",
+        script_path="/Users/me/.clawd-tank/clawd-tank-notify",
+    )
+    assert cmd == "/Users/me/.clawd-tank/clawd-tank-notify"
+
+
+def _use_hook_command(monkeypatch, command):
+    monkeypatch.setattr(hooks, "HOOK_COMMAND", command)
+    monkeypatch.setattr(hooks, "HOOKS_CONFIG", hooks.build_hooks_config(command))
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
+def test_frozen_install_replaces_a_group_left_by_the_python_interpreter(
+        settings_path, monkeypatch):
+    """Upgrading from a source checkout to the installer must self-heal: the old
+    `"python.exe" "clawd-tank-notify.py"` group is ours and gets replaced."""
+    stale = f'"C:\\venv\\python.exe" "{hooks.NOTIFY_SCRIPT_PATH}"'
+    settings_path.write_text(json.dumps({
+        "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": stale}]}]}
+    }))
+    frozen_cmd = f'"{_FROZEN_NOTIFY}"'
+    _use_hook_command(monkeypatch, frozen_cmd)
+    install_hooks()
+    assert _commands_for(_read(settings_path), "SessionStart") == [frozen_cmd]
+    assert are_hooks_installed()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
+def test_frozen_build_reports_hooks_outdated_while_python_groups_remain(
+        settings_path, monkeypatch):
+    """Startup only reinstalls when are_hooks_installed() is False. A group left by
+    a source checkout is ours, but not the CURRENT command — reporting it as
+    installed would keep hooks pointing at a venv the installer does not own."""
+    stale = f'"C:\\venv\\python.exe" "{hooks.NOTIFY_SCRIPT_PATH}"'
+    settings_path.write_text(json.dumps({"hooks": {
+        event: [{**({"matcher": e["matcher"]} if "matcher" in e else {}),
+                 "hooks": [{"type": "command", "command": stale}]} for e in entries]
+        for event, entries in HOOKS_CONFIG.items()
+    }}))
+    _use_hook_command(monkeypatch, f'"{_FROZEN_NOTIFY}"')
+    assert not are_hooks_installed()
+    install_hooks()
+    assert are_hooks_installed()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
+def test_install_replaces_a_notify_exe_group_from_another_install_folder(
+        settings_path, monkeypatch):
+    """Moving the install (or going back to a source checkout) must not leave a
+    group pointing at a notify exe that is no longer there."""
+    stale = '"D:\\Old Place\\MargaritaTank\\margarita-notify.exe"'
+    settings_path.write_text(json.dumps({
+        "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": stale}]}]}
+    }))
+    install_hooks()
+    assert _commands_for(_read(settings_path), "SessionStart") == [HOOK_COMMAND]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
+def test_wrapper_around_the_notify_exe_is_not_ours(settings_path):
+    """Same anchoring rule as for the script: `cmd /c "<notify exe>"` is a user's
+    wrapper and must survive a reinstall."""
+    wrapper = f'cmd /c "{_FROZEN_NOTIFY}"'
+    settings_path.write_text(json.dumps({
+        "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": wrapper}]}]}
+    }))
+    install_hooks()
+    assert wrapper in _commands_for(_read(settings_path), "SessionStart")
+
+
 # Non-ASCII user content: on Windows the default text encoding is the ANSI code
 # page (cp1252), which cannot decode UTF-8 bytes like 0x9d ("”" = e2 80 9d).
 # Settings must always be read and written as UTF-8.

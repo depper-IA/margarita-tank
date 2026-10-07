@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Clawd Tank is a physical notification display for Claude Code sessions. It runs on a **Waveshare ESP32-C6-LCD-1.47** (320x172 ST7789 SPI display) and shows an animated pixel-art crab ("Clawd") alongside notification cards received over BLE from a Python host daemon.
+Margarita Tank (a fork of Clawd Tank) is a physical notification display for Claude Code sessions. It runs on a **Waveshare ESP32-C6-LCD-1.47** (320x172 ST7789 SPI display) and shows an animated pixel-art crab ("Clawd") alongside notification cards received over BLE from a Python host daemon.
 
 Three components: **firmware** (ESP-IDF C), **simulator** (native macOS), **host** (Python daemon + Claude Code hooks).
 
@@ -87,7 +87,23 @@ cd host && ./build.sh --install
 cd host && ./build.sh
 ```
 
-The build script always rebuilds the static simulator, runs `py2app`, and copies the sim binary into the `.app` bundle.
+The build script always rebuilds the static simulator, runs `py2app`, and copies the sim binary into the `.app` bundle. The bundle is `Margarita Tank.app` (user-visible rebrand); the bundle identifier and all data paths (`~/.clawd-tank`, `~/Library/Logs/ClawdTank`, launchd label) keep their upstream names so existing installs keep working.
+
+### Windows Tray App (installer)
+
+```bash
+# PyInstaller onedir build -> host/dist/MargaritaTank/ (MargaritaTank.exe + margarita-notify.exe)
+cd host && .venv/Scripts/python.exe -m PyInstaller windows/margarita_tank.spec --noconfirm
+
+# Inno Setup installer -> host/dist/Margarita-Tank-Setup.exe (per-user, no admin)
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=1.2.3 host/windows/installer.iss
+```
+
+`margarita-notify.exe` is a console exe running the same stdlib-only notify script (`hooks.NOTIFY_SCRIPT`); a frozen build points the Claude Code hooks at it, because `sys.executable` is the tray exe there, not Python. The spec bundles `simulator/build-static/clawd-tank-sim.exe` (or `simulator/build/`) when present.
+
+### Releases
+
+`.github/workflows/release.yml` runs on a `vX.Y.Z` tag push (or a release published from the UI) and attaches `Margarita-Tank.dmg` and `Margarita-Tank-Setup.exe` to the release. Asset names are unversioned so the README links to `releases/latest/download/<asset>`.
 
 ### Tests
 

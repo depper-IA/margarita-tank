@@ -6,6 +6,19 @@ Corre sobre un [Waveshare ESP32-C6-LCD-1.47](https://s.click.aliexpress.com/e/_c
 
 > **Nota de fork.** Este es un fork personal de [**Clawd Tank** de Marcio Granzotto Rodrigues](https://github.com/marciogranzotto/clawd-tank), bajo licencia MIT. Todo el crédito del firmware, simulador y arquitectura del daemon originales es del autor upstream. La portabilidad del simulador (macOS + Windows) también es del proyecto original.
 
+## Descargas
+
+| Plataforma | Instalador |
+| ---------- | ---------- |
+| **macOS** (Apple Silicon) | [Margarita-Tank.dmg](https://github.com/depper-IA/margarita-tank/releases/latest/download/Margarita-Tank.dmg) |
+| **Windows** (x64) | [Margarita-Tank-Setup.exe](https://github.com/depper-IA/margarita-tank/releases/latest/download/Margarita-Tank-Setup.exe) |
+
+Ambos instalan la app de la barra de menú / bandeja con el simulador incluido, y la app instala los hooks de Claude Code en el primer arranque. Después, reinicia tus sesiones de Claude Code.
+
+- **macOS**: abre el DMG y arrastra **Margarita Tank** a Aplicaciones. La app no está firmada, así que la primera vez hay que hacer clic derecho → **Abrir**, o ejecutar `xattr -dr com.apple.quarantine "/Applications/Margarita Tank.app"`.
+- **Windows**: instalación por usuario, sin permisos de administrador. El instalador no está firmado, así que SmartScreen puede avisar: clic en **Más información** → **Ejecutar de todas formas**.
+- **Hardware**: el firmware del ESP32 no va en los instaladores; se flashea aparte (ver [Firmware](#firmware-esp-idf-53x)). Sin hardware, usa el simulador incluido desde el menú de la app.
+
 ## Qué agrega este fork
 
 | Categoría | Cambios |

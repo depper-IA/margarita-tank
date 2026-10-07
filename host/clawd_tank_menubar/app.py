@@ -24,7 +24,7 @@ logger = logging.getLogger("clawd-tank.menubar")
 
 class ClawdTankApp(rumps.App):
     def __init__(self):
-        super().__init__("Clawd Tank", quit_button=None)
+        super().__init__("Margarita Tank", quit_button=None)
         self._view = RumpsTrayView(self)
         self._controller = ClawdTankController(self._view)
         self._view.build(self._controller)

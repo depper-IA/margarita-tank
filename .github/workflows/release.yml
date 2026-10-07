@@ -1,15 +1,42 @@
 name: Release
 
+# Builds both desktop installers and attaches them to the GitHub release:
+#
+#   Margarita-Tank.dmg          macOS (Apple Silicon) menu bar app
+#   Margarita-Tank-Setup.exe    Windows tray app (per-user Inno Setup installer)
+#
+# Asset names carry no version on purpose, so the README can link to
+# https://github.com/depper-IA/margarita-tank/releases/latest/download/<asset>.
+#
+# Triggers:
+#   - pushing a vX.Y.Z tag (the normal flow, see .claude/skills/releasing):
+#     creates the release with both assets.
+#   - publishing a release from the GitHub UI: attaches the assets to it. A
+#     release created by this workflow's own token does not re-trigger it, and
+#     the concurrency group below serialises a tag push + UI publish of the same
+#     tag; re-uploads overwrite the same file names, never add duplicates.
+#   - workflow_dispatch: builds both installers as run artifacts only.
+
 on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  LVGL_SHA: 85aa60d18b3d5e5588d7b247abf90198f07c8a63
+
 jobs:
-  build:
+  macos:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v6
@@ -19,48 +46,165 @@ jobs:
           mkdir -p firmware/managed_components
           git clone --depth 1 https://github.com/lvgl/lvgl.git firmware/managed_components/lvgl__lvgl
           cd firmware/managed_components/lvgl__lvgl
-          git fetch --depth 1 origin 85aa60d18b3d5e5588d7b247abf90198f07c8a63
-          git checkout 85aa60d18b3d5e5588d7b247abf90198f07c8a63
+          git fetch --depth 1 origin "$LVGL_SHA"
+          git checkout "$LVGL_SHA"
 
-      - name: Build simulator
+      - name: Build static simulator
         run: |
           cd simulator
-          cmake -B build -DSTATIC_SDL2=ON
-          cmake --build build
+          cmake -B build-static -DSTATIC_SDL2=ON
+          cmake --build build-static
           # Verify no SDL2 dynamic dependency
-          otool -L build/clawd-tank-sim > /tmp/otool-out.txt
+          otool -L build-static/clawd-tank-sim > /tmp/otool-out.txt
           if grep -qi sdl /tmp/otool-out.txt; then
             echo "ERROR: SDL2 dynamic dependency found"
             cat /tmp/otool-out.txt
             exit 1
           fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install host dependencies
+      - name: Install dependencies
+        working-directory: host
         run: |
-          cd host
           pip install -r requirements.txt
           pip install py2app
 
-      - name: Build menu bar app
-        run: |
-          cd host
-          python setup.py py2app
+      - name: Build .app with py2app
+        working-directory: host
+        run: python setup.py py2app
 
       - name: Bundle simulator into app
+        # Contents/Resources/ is where sim_process.py looks first (helper
+        # binaries in Contents/MacOS/ can be mistaken for the main executable).
         run: |
-          cp simulator/build/clawd-tank-sim "host/dist/Clawd Tank.app/Contents/MacOS/"
+          cp simulator/build-static/clawd-tank-sim "host/dist/Margarita Tank.app/Contents/Resources/clawd-tank-sim"
 
-      - name: Create release zip
+      - name: Create DMG
+        working-directory: host
         run: |
-          cd host/dist
-          zip -r clawd-tank-macos-arm64.zip "Clawd Tank.app"
+          mkdir -p dmg-staging
+          cp -R "dist/Margarita Tank.app" dmg-staging/
+          ln -s /Applications dmg-staging/Applications
+          hdiutil create -volname "Margarita Tank" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            "dist/Margarita-Tank.dmg"
+          rm -rf dmg-staging
 
-      - name: Upload release asset
+      - name: Upload DMG as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Margarita-Tank-macOS
+          path: host/dist/Margarita-Tank.dmg
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up MinGW-w64 toolchain
+        shell: pwsh
+        run: |
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed mingw-w64-x86_64-gcc
+          "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Fetch LVGL (managed component not in git)
+        run: |
+          mkdir -p firmware/managed_components
+          git clone --depth 1 https://github.com/lvgl/lvgl.git firmware/managed_components/lvgl__lvgl
+          cd firmware/managed_components/lvgl__lvgl
+          git fetch --depth 1 origin "$LVGL_SHA"
+          git checkout "$LVGL_SHA"
+
+      - name: Build static simulator
+        run: |
+          cd simulator
+          cmake -B build-static -G Ninja -DSTATIC_SDL2=ON -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-static
+          # Verify no SDL2 / MinGW runtime dynamic dependency
+          objdump -p build-static/clawd-tank-sim.exe > objdump-out.txt
+          if grep -qiE 'DLL Name:.*(sdl2|libwinpthread|libgcc)' objdump-out.txt; then
+            echo "ERROR: dynamic dependency found"
+            cat objdump-out.txt
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: host
+        run: |
+          pip install -r requirements.txt
+          pip install "pyinstaller>=6.0,<7"
+
+      - name: Build tray app with PyInstaller
+        # The spec bundles simulator/build-static/clawd-tank-sim.exe.
+        working-directory: host
+        run: python -m PyInstaller windows/margarita_tank.spec --noconfirm
+
+      - name: Check the build
+        working-directory: host/dist/MargaritaTank
+        run: |
+          for f in MargaritaTank.exe margarita-notify.exe clawd-tank-sim.exe MargaritaTank.ico; do
+            test -f "$f" || { echo "ERROR: missing $f"; exit 1; }
+          done
+          # The hook handler must run standalone and exit 0 on an ignored event.
+          echo '{"hook_event_name":"Ignored"}' | ./margarita-notify.exe
+
+      - name: Derive installer version
+        env:
+          TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "APP_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=0.0.0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        working-directory: host
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & $iscc "/DAppVersion=$env:APP_VERSION" windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload installer as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Margarita-Tank-Windows
+          path: host/dist/Margarita-Tank-Setup.exe
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, windows]
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Attach installers to the release
         uses: softprops/action-gh-release@v3
         with:
-          files: host/dist/clawd-tank-macos-arm64.zip
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            assets/Margarita-Tank.dmg
+            assets/Margarita-Tank-Setup.exe

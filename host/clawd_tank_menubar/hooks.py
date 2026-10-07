@@ -4,6 +4,7 @@
 import copy
 import json
 import logging
+import ntpath
 import os
 import re
 import stat
@@ -231,70 +232,98 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         main()
 ''')
 
-# POSIX runs the script directly through its shebang. Windows has no shebang
-# support, so the interpreter is named explicitly. A .cmd shim would work too,
-# but it puts a second process between Claude Code and the hook on the hot path
-# of every event, for nothing.
-if sys.platform == "win32":
-    # Quoted because either path may contain spaces; Claude Code hands the
-    # command to `cmd.exe /d /s /c "<command>"`, which strips only the outer
-    # pair and passes the rest through verbatim.
-    HOOK_COMMAND = f'"{sys.executable}" "{NOTIFY_SCRIPT_PATH}"'
-else:
-    HOOK_COMMAND = str(NOTIFY_SCRIPT_PATH)
+# File name of the console-subsystem notify exe that the Windows PyInstaller
+# build ships next to the tray exe (see host/windows/margarita_tank.spec).
+NOTIFY_EXE_NAME = "margarita-notify.exe"
 
-HOOKS_CONFIG = {
-    "SessionStart": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "Stop": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "StopFailure": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "Notification": [
-        {
-            "matcher": "idle_prompt",
-            "hooks": [{"type": "command", "command": HOOK_COMMAND}],
-        }
-    ],
-    "UserPromptSubmit": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "PreToolUse": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    # Scoped to AskUserQuestion only: the sole purpose is clearing the "waiting
-    # for input" alert when the user answers. Registering PostToolUse for every
-    # tool would double the device's event/BLE traffic for no added value.
-    "PostToolUse": [
-        {
-            "matcher": ASK_USER_QUESTION_TOOL,
-            "hooks": [{"type": "command", "command": HOOK_COMMAND}],
-        }
-    ],
-    # Claude is blocked waiting for the user to approve a tool → waiting/alert.
-    "PermissionRequest": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    # A tool genuinely errored (not a non-zero shell exit) → confused.
-    "PostToolUseFailure": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "PreCompact": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "SessionEnd": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "SubagentStart": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-    "SubagentStop": [
-        {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}
-    ],
-}
+
+def build_hook_command(platform: str, frozen: bool, executable: str, script_path) -> str:
+    """The command Claude Code runs for every hook.
+
+    POSIX runs the script directly through its shebang. Windows has no shebang
+    support, so the interpreter is named explicitly. A .cmd shim would work too,
+    but it puts a second process between Claude Code and the hook on the hot
+    path of every event, for nothing.
+
+    A packaged Windows build (PyInstaller sets sys.frozen) has no Python
+    interpreter to name: sys.executable is the tray app itself, so naming it
+    would start another tray instance on every hook. It runs the bundled
+    console notify exe that sits next to the tray exe instead.
+
+    Windows paths are quoted because they may contain spaces; Claude Code hands
+    the command to `cmd.exe /d /s /c "<command>"`, which strips only the outer
+    pair and passes the rest through verbatim.
+    """
+    if platform == "win32":
+        if frozen:
+            notify_exe = ntpath.join(ntpath.dirname(executable), NOTIFY_EXE_NAME)
+            return f'"{notify_exe}"'
+        return f'"{executable}" "{script_path}"'
+    return str(script_path)
+
+
+HOOK_COMMAND = build_hook_command(
+    sys.platform, getattr(sys, "frozen", False), sys.executable, NOTIFY_SCRIPT_PATH
+)
+
+
+def build_hooks_config(command: str) -> dict:
+    """Every managed hook group, each running `command`."""
+    return {
+        "SessionStart": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "Stop": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "StopFailure": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "Notification": [
+            {
+                "matcher": "idle_prompt",
+                "hooks": [{"type": "command", "command": command}],
+            }
+        ],
+        "UserPromptSubmit": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "PreToolUse": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        # Scoped to AskUserQuestion only: the sole purpose is clearing the "waiting
+        # for input" alert when the user answers. Registering PostToolUse for every
+        # tool would double the device's event/BLE traffic for no added value.
+        "PostToolUse": [
+            {
+                "matcher": ASK_USER_QUESTION_TOOL,
+                "hooks": [{"type": "command", "command": command}],
+            }
+        ],
+        # Claude is blocked waiting for the user to approve a tool → waiting/alert.
+        "PermissionRequest": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        # A tool genuinely errored (not a non-zero shell exit) → confused.
+        "PostToolUseFailure": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "PreCompact": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "SessionEnd": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "SubagentStart": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+        "SubagentStop": [
+            {"hooks": [{"type": "command", "command": command}]}
+        ],
+    }
+
+
+HOOKS_CONFIG = build_hooks_config(HOOK_COMMAND)
 
 
 def install_notify_script() -> None:
@@ -327,9 +356,13 @@ def _matcher_of(entry: dict):
 # duplicate group invoking an interpreter that is no longer there. Match on the
 # script instead, anchored so only `"<interpreter>" "<script>"` with nothing in
 # front of it counts — a wrapper such as `cat "<script>"` still does not.
+# The packaged build's `"<install dir>\margarita-notify.exe"` is matched the same
+# way, on the exe's file name, so switching between a source checkout and an
+# installed build (or moving the install) replaces the previous group too.
 if sys.platform == "win32":
     _OUR_COMMAND_RE = re.compile(
-        '^"[^"]+" "' + re.escape(str(NOTIFY_SCRIPT_PATH)) + '"( |$)')
+        '^(?:"[^"]+" "' + re.escape(str(NOTIFY_SCRIPT_PATH)) + '"'
+        r'|"[^"]*[\\/](?i:' + re.escape(NOTIFY_EXE_NAME) + ')")( |$)')
 else:
     _OUR_COMMAND_RE = None
 
@@ -342,17 +375,27 @@ def _command_is_ours(command) -> bool:
         return False
     if _OUR_COMMAND_RE is not None:
         return _OUR_COMMAND_RE.match(command) is not None
+    return _command_is_current(command)
+
+
+def _command_is_current(command) -> bool:
+    """True only if a hook command is exactly the CURRENT HOOK_COMMAND (optionally
+    followed by args). On Windows _command_is_ours() also accepts commands left by
+    another interpreter or install folder, so they get pruned on reinstall; those
+    must not count as installed, or startup would never replace them."""
+    if not isinstance(command, str):
+        return False
     return command == HOOK_COMMAND or command.startswith(HOOK_COMMAND + " ")
 
 
-def _group_runs_our_command(entry: dict) -> bool:
-    """True if a hook group contains a hook that runs the Clawd Tank notify script."""
+def _group_runs_current_command(entry: dict) -> bool:
+    """True if a hook group contains a hook that runs the current notify command."""
     if not isinstance(entry, dict):
         return False
     hooks_list = entry.get("hooks")
     if not isinstance(hooks_list, list):
         return False
-    return any(isinstance(h, dict) and _command_is_ours(h.get("command", "")) for h in hooks_list)
+    return any(isinstance(h, dict) and _command_is_current(h.get("command", "")) for h in hooks_list)
 
 
 def _is_our_managed_group(entry: dict) -> bool:
@@ -368,11 +411,11 @@ def _is_our_managed_group(entry: dict) -> bool:
 
 
 def _our_hook_present(existing_entries, our_matcher) -> bool:
-    """True if some existing group with the same matcher already runs our command."""
+    """True if some existing group with the same matcher already runs the current command."""
     if not isinstance(existing_entries, list):
         return False
     for entry in existing_entries:
-        if _matcher_of(entry) == our_matcher and _group_runs_our_command(entry):
+        if _matcher_of(entry) == our_matcher and _group_runs_current_command(entry):
             return True
     return False
 

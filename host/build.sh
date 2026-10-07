@@ -1,11 +1,15 @@
 #!/bin/bash
-# Build the Clawd Tank menu bar .app bundle with bundled simulator.
+# Build the Margarita Tank menu bar .app bundle with bundled simulator.
 # Usage: cd host && ./build.sh [--install]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SIM_DIR="$SCRIPT_DIR/../simulator"
 SIM_BINARY="$SIM_DIR/build-static/clawd-tank-sim"
+APP_NAME="Margarita Tank.app"
+# Bundle name used before the rebrand; removed on --install so two copies of
+# the same app (same bundle id) don't linger in /Applications.
+LEGACY_APP_NAME="Clawd Tank.app"
 
 # Always rebuild static simulator — cmake handles incremental builds
 echo "==> Building static simulator..."
@@ -22,14 +26,15 @@ rm -rf build dist
 
 # Bundle simulator binary
 echo "==> Bundling simulator binary..."
-cp "$SIM_BINARY" "dist/Clawd Tank.app/Contents/Resources/clawd-tank-sim"
+cp "$SIM_BINARY" "dist/$APP_NAME/Contents/Resources/clawd-tank-sim"
 
-echo "==> Built: dist/Clawd Tank.app"
+echo "==> Built: dist/$APP_NAME"
 
 # Install if requested
 if [ "${1:-}" = "--install" ]; then
     echo "==> Installing to /Applications..."
-    rm -rf "/Applications/Clawd Tank.app"
-    cp -R "dist/Clawd Tank.app" "/Applications/Clawd Tank.app"
-    echo "==> Installed to /Applications/Clawd Tank.app"
+    rm -rf "/Applications/$LEGACY_APP_NAME"
+    rm -rf "/Applications/$APP_NAME"
+    cp -R "dist/$APP_NAME" "/Applications/$APP_NAME"
+    echo "==> Installed to /Applications/$APP_NAME"
 fi
