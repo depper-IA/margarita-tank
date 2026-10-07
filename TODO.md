@@ -24,6 +24,16 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 
 ---
 
+## Windows Claude PID resolution — Complete
+
+- [x] **Hook resolves Claude's PID on Windows** — `_find_claude_pid()` (NOTIFY_SCRIPT,
+  mirrored in `pid_resolver.py`) walks one Toolhelp32 snapshot for the first `claude.exe`
+  ancestor. Windows sessions now keep the normal staleness timeout and are evicted by the
+  PID-liveness checker when Claude exits, instead of vanishing 90 s after going idle.
+  No ancestor (node-hosted install) → `None`, never the short-lived shell's PID.
+  Limitation: a PID reused within one 30 s liveness tick keeps the session until the
+  normal timeout (creation time is not compared).
+
 ## Code-review hardening (attention-hooks branch) — Complete
 
 Multi-agent review of the attention-hooks work surfaced 15 findings; fixes:

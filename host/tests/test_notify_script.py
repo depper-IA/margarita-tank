@@ -139,11 +139,16 @@ def _run_script_with_payload(payload: dict, sock_path: str,
 
 def _assert_pid(msg: dict) -> None:
     """The script stamps the resolved Claude Code PID on POSIX. On Windows it
-    deliberately sends none — see NOTIFY_SCRIPT._find_claude_pid — so the daemon
-    falls back to staleness eviction instead of watching a PID that is not
-    Claude Code's."""
+    stamps a claude.exe ancestor's PID, or none at all when there is no such
+    ancestor — see NOTIFY_SCRIPT._find_claude_pid — so the daemon never watches
+    a PID that is not Claude Code's. Which one depends on whether this suite
+    itself runs under Claude Code."""
     if WINDOWS:
-        assert msg.get("pid") is None
+        pid = msg.get("pid")
+        if pid is not None:
+            from clawd_tank_daemon.pid_resolver import _windows_process_table
+            _, name = _windows_process_table()[pid]
+            assert name.lower() == "claude.exe"
     else:
         assert isinstance(msg.get("pid"), int)
         assert msg["pid"] > 0

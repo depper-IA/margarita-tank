@@ -61,8 +61,8 @@ PID_DEDUP_FRESHNESS_SECONDS = 60.0
 # never reports range/sleep disconnects, so without this probe a dead link is
 # never detected and the daemon never re-scans. Detection lag ~= this interval.
 BLE_LIVENESS_INTERVAL_SECS = 20.0
-# Sessions WITHOUT a resolvable PID (e.g. every session on Windows, where the
-# hook cannot safely resolve Claude's PID) can't be pruned by the PID-liveness
+# Sessions WITHOUT a resolvable PID (e.g. a node-hosted Claude Code on Windows,
+# where the hook finds no claude.exe ancestor) can't be pruned by the PID-liveness
 # checker. They rely entirely on time-based eviction, so they use a much
 # shorter timeout than PID-backed sessions (which the liveness checker evicts
 # the instant the process dies). Keeps ghost sessions from lingering ~10 min
@@ -490,8 +490,9 @@ class ClawdDaemon:
                 continue
             # Adaptive timeout: PID-backed sessions are already covered by the
             # liveness checker (evicted the instant the process dies), so they
-            # keep the long timeout. Sessions with no PID (Windows, or failed
-            # detection) have no such safety net, so they expire much sooner.
+            # keep the long timeout. Sessions with no PID (failed detection,
+            # e.g. no claude.exe ancestor on Windows) have no such safety net,
+            # so they expire much sooner.
             has_pid = s.get("pid") is not None
             timeout = self._session_staleness_timeout if has_pid else NO_PID_STALENESS_TIMEOUT
             idle = now_mono - s.get("last_event_monotonic", now_mono)

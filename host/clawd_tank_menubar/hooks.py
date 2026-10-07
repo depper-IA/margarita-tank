@@ -35,7 +35,7 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
     it to the daemon: a Unix socket on POSIX, an authenticated loopback TCP
     connection on Windows. No external dependencies.
     """
-    # NOTIFY_SCRIPT_VERSION: 2026-09-12-windows-ingress
+    # NOTIFY_SCRIPT_VERSION: 2026-10-06-windows-pid
 
     import json
     import os
@@ -55,6 +55,12 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
 
     _CLAUDE_ARGV_RE = re.compile(r"(^|/)claude($|\\s)")
 
+    # Windows: image name of the native Claude Code install.
+    _CLAUDE_EXE_NAME = "claude.exe"
+    # A hook sits a handful of levels below Claude (python launcher, python, one
+    # to three bash.exe). Anything deeper is not this hook's Claude.
+    _MAX_ANCESTRY_DEPTH = 32
+
 
     def _ps(field, pid):
         """Run `ps -o <field>= -p <pid>`, return trimmed stdout. Empty on error."""
@@ -68,21 +74,97 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
             return ""
 
 
+    def _walk_to_claude(start, table):
+        """Return the first PID at or above `start` whose image is claude.exe.
+
+        `table` maps pid -> (parent pid, exe name) from one Toolhelp32 snapshot.
+        None when the chain breaks (parent already exited), loops (a reused
+        PID), or exceeds the depth limit.
+
+        Mirrors clawd_tank_daemon/pid_resolver.py:walk_to_claude — keep in sync.
+        """
+        pid = start
+        seen = set()
+        for _ in range(_MAX_ANCESTRY_DEPTH):
+            if pid in seen or pid not in table:
+                return None
+            seen.add(pid)
+            ppid, name = table[pid]
+            if name.lower() == _CLAUDE_EXE_NAME:
+                return pid
+            pid = ppid
+        return None
+
+
+    def _windows_process_table():
+        """Snapshot every process once: pid -> (parent pid, exe name)."""
+        import ctypes
+        from ctypes import wintypes
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.c_size_t),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", wintypes.WCHAR * 260),
+            ]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+        kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        kernel32.Process32FirstW.argtypes = (wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W))
+        kernel32.Process32FirstW.restype = wintypes.BOOL
+        kernel32.Process32NextW.argtypes = (wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W))
+        kernel32.Process32NextW.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        th32cs_snapprocess = 0x00000002
+        invalid_handle = wintypes.HANDLE(-1).value
+        snap = kernel32.CreateToolhelp32Snapshot(th32cs_snapprocess, 0)
+        if not snap or snap == invalid_handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        table = {}
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            ok = kernel32.Process32FirstW(snap, ctypes.byref(entry))
+            while ok:
+                table[entry.th32ProcessID] = (entry.th32ParentProcessID, entry.szExeFile)
+                ok = kernel32.Process32NextW(snap, ctypes.byref(entry))
+        finally:
+            kernel32.CloseHandle(snap)
+        return table
+
+
     def _find_claude_pid():
         """Walk from os.getppid() up the process tree to find the long-lived
-        Claude Code PID. Falls back to os.getppid() if no `claude` ancestor.
+        Claude Code PID.
 
         Mirrors clawd_tank_daemon/pid_resolver.py — keep in sync.
 
-        Returns None on Windows, where the daemon then falls back to the
-        staleness timeout: there is no `ps`, a Toolhelp32 snapshot exposes image
-        names but not the argv that identifies a node-hosted `claude`, and the
-        hook itself runs under a shell that exits the moment it returns. Sending
-        that shell's PID would be worse than sending none — the daemon would see
-        it die and evict a session that is very much alive.
+        POSIX: asks `ps` per ancestor; falls back to os.getppid() if no
+        `claude` ancestor.
+
+        Windows: walks one Toolhelp32 snapshot for a claude.exe ancestor (the
+        native install). Returns None if there is none, or on any failure — never
+        os.getppid(): the hook runs under a shell that exits the moment it
+        returns, and sending that shell's PID would make the daemon's liveness
+        checker evict a session that is very much alive. A node-hosted install
+        is not recognized (that needs argv, which the snapshot lacks), so it
+        falls back to the daemon's staleness timeout.
         """
         if sys.platform == "win32":
-            return None
+            try:
+                return _walk_to_claude(os.getppid(), _windows_process_table())
+            except Exception:
+                return None
         start = os.getppid()
         pid = start
         while pid > 1:
