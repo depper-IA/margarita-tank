@@ -314,3 +314,22 @@ def test_windows_command_names_the_interpreter_and_a_py_file():
     to name an interpreter and a .py file, both quoted against spaces in paths."""
     assert hooks.NOTIFY_SCRIPT_PATH.suffix == ".py"
     assert HOOK_COMMAND == f'"{sys.executable}" "{hooks.NOTIFY_SCRIPT_PATH}"'
+
+
+# Non-ASCII user content: on Windows the default text encoding is the ANSI code
+# page (cp1252), which cannot decode UTF-8 bytes like 0x9d ("”" = e2 80 9d).
+# Settings must always be read and written as UTF-8.
+_NON_ASCII_SETTINGS = {"statusLine": {"command": "echo “Margarita” — ñandú"}}
+
+
+def test_are_hooks_installed_reads_utf8_settings(settings_path):
+    settings_path.write_text(json.dumps(_NON_ASCII_SETTINGS, ensure_ascii=False), encoding="utf-8")
+    install_hooks()
+    assert are_hooks_installed() is True
+
+
+def test_install_preserves_non_ascii_user_settings(settings_path):
+    settings_path.write_text(json.dumps(_NON_ASCII_SETTINGS, ensure_ascii=False), encoding="utf-8")
+    install_hooks()
+    written = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert written["statusLine"] == _NON_ASCII_SETTINGS["statusLine"]

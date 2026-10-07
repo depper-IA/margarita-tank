@@ -386,7 +386,7 @@ def are_hooks_installed() -> bool:
     if not CLAUDE_SETTINGS_PATH.exists():
         return False
     try:
-        settings = json.loads(CLAUDE_SETTINGS_PATH.read_text())
+        settings = json.loads(CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
     if not isinstance(settings, dict):
@@ -421,7 +421,7 @@ def install_hooks() -> bool:
 
     if CLAUDE_SETTINGS_PATH.exists():
         try:
-            settings = json.loads(CLAUDE_SETTINGS_PATH.read_text())
+            settings = json.loads(CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             settings = {}
     else:
@@ -446,6 +446,8 @@ def install_hooks() -> bool:
                 kept.append(copy.deepcopy(our_entry))
         hooks[event_name] = kept
 
-    CLAUDE_SETTINGS_PATH.write_text(json.dumps(settings, indent=2) + "\n")
+    CLAUDE_SETTINGS_PATH.write_text(
+        json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     logger.info("Installed hooks in %s", CLAUDE_SETTINGS_PATH)
     return True
