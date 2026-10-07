@@ -16,7 +16,7 @@ Corre sobre un [Waveshare ESP32-C6-LCD-1.47](https://s.click.aliexpress.com/e/_c
 Ambos instalan la app de la barra de menú / bandeja con el simulador incluido, y la app instala los hooks de Claude Code en el primer arranque. Después, reinicia tus sesiones de Claude Code.
 
 - **macOS**: abre el DMG y arrastra **Margarita Tank** a Aplicaciones. La app no está firmada, así que la primera vez hay que hacer clic derecho → **Abrir**, o ejecutar `xattr -dr com.apple.quarantine "/Applications/Margarita Tank.app"`.
-- **Windows**: instalación por usuario, sin permisos de administrador. El instalador no está firmado, así que SmartScreen puede avisar: clic en **Más información** → **Ejecutar de todas formas**.
+- **Windows**: instalación por usuario, sin permisos de administrador. El instalador no está firmado, así que SmartScreen puede avisar: clic en **Más información** → **Ejecutar de todas formas**. Al desinstalar se quitan de `~/.claude/settings.json` solo los hooks de Margarita Tank; tus propios hooks quedan intactos.
 - **Hardware**: el firmware del ESP32 no va en los instaladores; se flashea aparte (ver [Firmware](#firmware-esp-idf-53x)). Sin hardware, usa el simulador incluido desde el menú de la app.
 
 ## Qué agrega este fork

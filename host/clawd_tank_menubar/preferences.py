@@ -16,8 +16,11 @@ DEFAULTS = {
 PREFS_PATH = Path.home() / ".clawd-tank" / "preferences.json"
 
 
-def load_preferences(path: Path = PREFS_PATH) -> dict:
+def load_preferences(path: Path | None = None) -> dict:
     """Load preferences from disk, merged with defaults for missing keys."""
+    # PREFS_PATH is looked up per call (not bound as a default) so tests can
+    # redirect it away from the user's real preferences file.
+    path = PREFS_PATH if path is None else path
     result = dict(DEFAULTS)
     try:
         stored = json.loads(path.read_text())
@@ -27,8 +30,9 @@ def load_preferences(path: Path = PREFS_PATH) -> dict:
     return result
 
 
-def save_preferences(path: Path = PREFS_PATH, updates: dict = None) -> None:
+def save_preferences(path: Path | None = None, updates: dict = None) -> None:
     """Read-modify-write: load existing, merge updates, save back."""
+    path = PREFS_PATH if path is None else path
     if updates is None:
         updates = {}
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -39,13 +39,19 @@ else:
 MAX_LINE_BYTES = 64 * 1024
 
 
+def _resolve_socket_path(socket_path: Path | None) -> Path:
+    """Read SOCKET_PATH at construction time, not as a default argument bound at
+    import time, so tests can redirect it away from the live daemon's file."""
+    return SOCKET_PATH if socket_path is None else socket_path
+
+
 class UnixSocketServer:
     """Listens on a Unix socket for JSON messages from clawd-tank-notify."""
 
     def __init__(self, on_message: Callable[[dict], Awaitable[None]],
-                 socket_path: Path = SOCKET_PATH):
+                 socket_path: Path | None = None):
         self._on_message = on_message
-        self._socket_path = socket_path
+        self._socket_path = _resolve_socket_path(socket_path)
         self._server: asyncio.Server | None = None
 
     async def start(self) -> None:
@@ -98,9 +104,9 @@ class TcpSocketServer:
     """
 
     def __init__(self, on_message: Callable[[dict], Awaitable[None]],
-                 socket_path: Path = SOCKET_PATH):
+                 socket_path: Path | None = None):
         self._on_message = on_message
-        self._socket_path = socket_path
+        self._socket_path = _resolve_socket_path(socket_path)
         self._server: asyncio.Server | None = None
         self._token = b""
 

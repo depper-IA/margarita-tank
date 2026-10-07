@@ -359,12 +359,17 @@ def _matcher_of(entry: dict):
 # The packaged build's `"<install dir>\margarita-notify.exe"` is matched the same
 # way, on the exe's file name, so switching between a source checkout and an
 # installed build (or moving the install) replaces the previous group too.
-if sys.platform == "win32":
-    _OUR_COMMAND_RE = re.compile(
-        '^(?:"[^"]+" "' + re.escape(str(NOTIFY_SCRIPT_PATH)) + '"'
+def build_our_command_re(platform: str, script_path):
+    """Pattern recognising any command of ours on `platform`. None on POSIX,
+    where only the exact current command counts."""
+    if platform != "win32":
+        return None
+    return re.compile(
+        '^(?:"[^"]+" "' + re.escape(str(script_path)) + '"'
         r'|"[^"]*[\\/](?i:' + re.escape(NOTIFY_EXE_NAME) + ')")( |$)')
-else:
-    _OUR_COMMAND_RE = None
+
+
+_OUR_COMMAND_RE = build_our_command_re(sys.platform, NOTIFY_SCRIPT_PATH)
 
 
 def _command_is_ours(command) -> bool:
@@ -526,4 +531,57 @@ def install_hooks() -> bool:
 
     _write_settings_atomic(settings)
     logger.info("Installed hooks in %s", CLAUDE_SETTINGS_PATH)
+    return True
+
+
+def uninstall_hooks() -> bool:
+    """Remove every Clawd Tank hook group from Claude Code settings.
+
+    Uses the same ownership rule install_hooks() prunes with, applied to every
+    event (not only those HOOKS_CONFIG lists today), so groups left by an older
+    interpreter, install folder or retired event go too. The user's groups, and
+    any group the user shares with us, are left exactly as they are. An event
+    list is dropped only when it held nothing but our groups, and the "hooks"
+    object only when removing them emptied it. Idempotent; the file is not
+    rewritten when nothing of ours is in it.
+
+    Returns True when no hook of ours remains (including when there is no
+    settings file, which is left uncreated). Returns False — leaving the file
+    untouched — when an existing settings file cannot be parsed.
+    """
+    if not CLAUDE_SETTINGS_PATH.exists():
+        return True
+
+    settings = _load_settings()
+    if settings is None:
+        logger.warning(
+            "Not uninstalling hooks: %s is not a readable JSON object; left untouched",
+            CLAUDE_SETTINGS_PATH,
+        )
+        return False
+
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return True
+
+    changed = False
+    for event_name, groups in list(hooks.items()):
+        if not isinstance(groups, list):
+            continue
+        kept = [g for g in groups if not _is_our_managed_group(g)]
+        if len(kept) == len(groups):
+            continue
+        changed = True
+        if kept:
+            hooks[event_name] = kept
+        else:
+            del hooks[event_name]
+
+    if not changed:
+        return True
+    if not hooks:
+        del settings["hooks"]
+
+    _write_settings_atomic(settings)
+    logger.info("Uninstalled hooks from %s", CLAUDE_SETTINGS_PATH)
     return True

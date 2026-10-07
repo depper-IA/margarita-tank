@@ -13,8 +13,6 @@ import pytest
 
 from clawd_tank_menubar import hooks
 from clawd_tank_menubar.hooks import (
-    HOOKS_CONFIG,
-    HOOK_COMMAND,
     are_hooks_installed,
     install_hooks,
 )
@@ -49,7 +47,7 @@ def _commands_for(settings: dict, event: str) -> list[str]:
 
 
 def _our_command_count(settings: dict, event: str) -> int:
-    return sum(1 for c in _commands_for(settings, event) if HOOK_COMMAND in c)
+    return sum(1 for c in _commands_for(settings, event) if hooks.HOOK_COMMAND in c)
 
 
 # --- Fresh install ---
@@ -65,7 +63,7 @@ def test_install_creates_settings_when_absent(settings_path):
 def test_install_registers_every_managed_event(settings_path):
     install_hooks()
     settings = _read(settings_path)
-    for event in HOOKS_CONFIG:
+    for event in hooks.HOOKS_CONFIG:
         assert _our_command_count(settings, event) >= 1, f"{event} missing our hook"
 
 
@@ -84,7 +82,7 @@ def test_install_preserves_user_hook_on_managed_event(settings_path):
     install_hooks()
     cmds = _commands_for(_read(settings_path), "SessionStart")
     assert "/my/own/script.sh" in cmds, "user's hook was clobbered"
-    assert any(HOOK_COMMAND in c for c in cmds), "our hook was not added"
+    assert any(hooks.HOOK_COMMAND in c for c in cmds), "our hook was not added"
 
 
 def test_install_preserves_unrelated_settings_keys(settings_path):
@@ -115,7 +113,7 @@ def test_install_preserves_user_postooluse_with_different_matcher(settings_path)
     assert user_group is not None, "user's Bash PostToolUse group was removed"
     assert any(h["command"] == "/my/bash/hook" for h in user_group["hooks"])
     assert our_group is not None, "our AskUserQuestion PostToolUse group missing"
-    assert any(HOOK_COMMAND in h["command"] for h in our_group["hooks"])
+    assert any(hooks.HOOK_COMMAND in h["command"] for h in our_group["hooks"])
 
 
 def test_install_preserves_user_no_matcher_hook_on_permissionrequest(settings_path):
@@ -131,7 +129,7 @@ def test_install_preserves_user_no_matcher_hook_on_permissionrequest(settings_pa
     install_hooks()
     cmds = _commands_for(_read(settings_path), "PermissionRequest")
     assert "/opt/other-tool/hook.sh" in cmds, "user's PermissionRequest hook was clobbered"
-    assert any(HOOK_COMMAND in c for c in cmds), "our PermissionRequest hook was not added"
+    assert any(hooks.HOOK_COMMAND in c for c in cmds), "our PermissionRequest hook was not added"
 
 
 def test_install_preserves_user_command_sharing_a_group(settings_path):
@@ -141,7 +139,7 @@ def test_install_preserves_user_command_sharing_a_group(settings_path):
             "SessionStart": [
                 {"hooks": [
                     {"type": "command", "command": "/their/hook"},
-                    {"type": "command", "command": HOOK_COMMAND},
+                    {"type": "command", "command": hooks.HOOK_COMMAND},
                 ]}
             ]
         }
@@ -161,7 +159,7 @@ def test_install_is_idempotent(settings_path):
     install_hooks()
     install_hooks()
     settings = _read(settings_path)
-    for event, entries in HOOKS_CONFIG.items():
+    for event, entries in hooks.HOOKS_CONFIG.items():
         assert _our_command_count(settings, event) == len(entries), (
             f"{event} has duplicate Clawd Tank hooks after repeated installs"
         )
@@ -189,7 +187,7 @@ def test_are_hooks_installed_matcher_aware(settings_path):
     settings = _read(settings_path)
     # Replace our AskUserQuestion group with a Bash-matched one (wrong matcher).
     settings["hooks"]["PostToolUse"] = [
-        {"matcher": "Bash", "hooks": [{"type": "command", "command": HOOK_COMMAND}]}
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": hooks.HOOK_COMMAND}]}
     ]
     settings_path.write_text(json.dumps(settings))
     assert are_hooks_installed() is False
@@ -210,14 +208,14 @@ def test_install_prunes_stale_our_group_on_matcher_change(settings_path):
     settings_path.write_text(json.dumps({
         "hooks": {
             "PostToolUse": [
-                {"hooks": [{"type": "command", "command": HOOK_COMMAND}]}  # stale, no matcher
+                {"hooks": [{"type": "command", "command": hooks.HOOK_COMMAND}]}  # stale, no matcher
             ]
         }
     }))
     install_hooks()
     groups = _read(settings_path)["hooks"]["PostToolUse"]
     our_groups = [g for g in groups
-                  if any(HOOK_COMMAND in h.get("command", "") for h in g.get("hooks", []))]
+                  if any(hooks.HOOK_COMMAND in h.get("command", "") for h in g.get("hooks", []))]
     assert len(our_groups) == 1, "stale wildcard PostToolUse group was not pruned"
     assert our_groups[0].get("matcher") == "AskUserQuestion"
 
@@ -228,7 +226,7 @@ def test_are_hooks_installed_false_on_stale_our_group(settings_path):
     install_hooks()
     settings = _read(settings_path)
     settings["hooks"]["PostToolUse"].append(
-        {"matcher": "Bash", "hooks": [{"type": "command", "command": HOOK_COMMAND}]}
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": hooks.HOOK_COMMAND}]}
     )
     settings_path.write_text(json.dumps(settings))
     assert are_hooks_installed() is False
@@ -238,13 +236,13 @@ def test_install_self_heals_stale_group(settings_path):
     install_hooks()
     settings = _read(settings_path)
     settings["hooks"]["PostToolUse"].append(
-        {"matcher": "Bash", "hooks": [{"type": "command", "command": HOOK_COMMAND}]}
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": hooks.HOOK_COMMAND}]}
     )
     settings_path.write_text(json.dumps(settings))
     install_hooks()
     groups = _read(settings_path)["hooks"]["PostToolUse"]
     matchers = sorted(g.get("matcher") for g in groups
-                      if any(HOOK_COMMAND in h.get("command", "") for h in g["hooks"]))
+                      if any(hooks.HOOK_COMMAND in h.get("command", "") for h in g["hooks"]))
     assert matchers == ["AskUserQuestion"]
     assert are_hooks_installed() is True
 
@@ -257,7 +255,7 @@ def test_install_does_not_crash_on_null_hooks_value(settings_path):
         "hooks": {"SessionStart": [{"matcher": "X", "hooks": None}]}
     }))
     install_hooks()  # must not raise TypeError
-    assert any(HOOK_COMMAND in c for c in _commands_for(_read(settings_path), "SessionStart"))
+    assert any(hooks.HOOK_COMMAND in c for c in _commands_for(_read(settings_path), "SessionStart"))
 
 
 def test_are_hooks_installed_does_not_crash_on_null_hooks_value(settings_path):
@@ -276,14 +274,14 @@ def test_install_not_fooled_by_substring_command(settings_path):
     settings_path.write_text(json.dumps({
         "hooks": {
             "SessionStart": [
-                {"hooks": [{"type": "command", "command": "/bin/cat " + HOOK_COMMAND}]}
+                {"hooks": [{"type": "command", "command": "/bin/cat " + hooks.HOOK_COMMAND}]}
             ]
         }
     }))
     install_hooks()
     cmds = _commands_for(_read(settings_path), "SessionStart")
-    assert "/bin/cat " + HOOK_COMMAND in cmds, "user's command was clobbered"
-    assert any(c == HOOK_COMMAND for c in cmds), "our real hook was not added"
+    assert "/bin/cat " + hooks.HOOK_COMMAND in cmds, "user's command was clobbered"
+    assert any(c == hooks.HOOK_COMMAND for c in cmds), "our real hook was not added"
 
 
 # --- Windows: the command embeds an interpreter path that can move ------------
@@ -292,11 +290,11 @@ def test_install_not_fooled_by_substring_command(settings_path):
 @pytest.mark.skipif(sys.platform != "win32",
                     reason="only the Windows command embeds an interpreter path")
 def test_install_replaces_a_group_left_by_a_different_interpreter(settings_path):
-    """A rebuilt venv or a moved Python changes HOOK_COMMAND. The prior group must
+    """A rebuilt venv or a moved Python changes hooks.HOOK_COMMAND. The prior group must
     be recognised as ours and replaced, not left behind pointing at an
     interpreter that is no longer there."""
     stale = f'"C:\\gone\\python.exe" "{hooks.NOTIFY_SCRIPT_PATH}"'
-    assert stale != HOOK_COMMAND
+    assert stale != hooks.HOOK_COMMAND
     settings_path.write_text(json.dumps({
         "hooks": {"SessionStart": [
             {"hooks": [{"type": "command", "command": stale}]}
@@ -305,7 +303,7 @@ def test_install_replaces_a_group_left_by_a_different_interpreter(settings_path)
     install_hooks()
     cmds = _commands_for(_read(settings_path), "SessionStart")
     assert stale not in cmds, "stale interpreter group was left behind"
-    assert cmds == [HOOK_COMMAND]
+    assert cmds == [hooks.HOOK_COMMAND]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
@@ -313,7 +311,7 @@ def test_windows_command_names_the_interpreter_and_a_py_file():
     """Windows cannot run an extensionless shebang script, so the hook command has
     to name an interpreter and a .py file, both quoted against spaces in paths."""
     assert hooks.NOTIFY_SCRIPT_PATH.suffix == ".py"
-    assert HOOK_COMMAND == f'"{sys.executable}" "{hooks.NOTIFY_SCRIPT_PATH}"'
+    assert hooks.HOOK_COMMAND == f'"{sys.executable}" "{hooks.NOTIFY_SCRIPT_PATH}"'
 
 
 # --- Windows packaged build: sys.executable is the tray exe, not Python ------
@@ -381,7 +379,7 @@ def test_frozen_build_reports_hooks_outdated_while_python_groups_remain(
     settings_path.write_text(json.dumps({"hooks": {
         event: [{**({"matcher": e["matcher"]} if "matcher" in e else {}),
                  "hooks": [{"type": "command", "command": stale}]} for e in entries]
-        for event, entries in HOOKS_CONFIG.items()
+        for event, entries in hooks.HOOKS_CONFIG.items()
     }}))
     _use_hook_command(monkeypatch, f'"{_FROZEN_NOTIFY}"')
     assert not are_hooks_installed()
@@ -399,7 +397,7 @@ def test_install_replaces_a_notify_exe_group_from_another_install_folder(
         "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": stale}]}]}
     }))
     install_hooks()
-    assert _commands_for(_read(settings_path), "SessionStart") == [HOOK_COMMAND]
+    assert _commands_for(_read(settings_path), "SessionStart") == [hooks.HOOK_COMMAND]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
@@ -442,7 +440,7 @@ def test_install_reads_settings_saved_with_utf8_bom(settings_path):
     assert install_hooks() is True
     written = _read(settings_path)
     assert written["model"] == "opus"
-    assert any(HOOK_COMMAND in c for c in _commands_for(written, "SessionStart"))
+    assert any(hooks.HOOK_COMMAND in c for c in _commands_for(written, "SessionStart"))
 
 
 @pytest.mark.parametrize("raw", [
@@ -465,7 +463,7 @@ def test_are_hooks_installed_false_on_undecodable_settings(settings_path):
 def test_install_treats_empty_settings_file_as_empty_object(settings_path, raw):
     settings_path.write_bytes(raw)
     assert install_hooks() is True
-    assert any(HOOK_COMMAND in c for c in _commands_for(_read(settings_path), "SessionStart"))
+    assert any(hooks.HOOK_COMMAND in c for c in _commands_for(_read(settings_path), "SessionStart"))
 
 
 def test_install_writes_through_a_symlinked_settings_file(settings_path, tmp_path):
@@ -479,7 +477,7 @@ def test_install_writes_through_a_symlinked_settings_file(settings_path, tmp_pat
     assert install_hooks() is True
     assert settings_path.is_symlink()
     assert json.loads(target.read_text(encoding="utf-8"))["model"] == "opus"
-    assert any(HOOK_COMMAND in c for c in _commands_for(_read(target), "SessionStart"))
+    assert any(hooks.HOOK_COMMAND in c for c in _commands_for(_read(target), "SessionStart"))
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
@@ -488,3 +486,173 @@ def test_install_preserves_settings_file_mode(settings_path):
     settings_path.chmod(0o644)
     install_hooks()
     assert settings_path.stat().st_mode & 0o777 == 0o644
+
+
+# --- Uninstall: remove only what install_hooks() added ----------------------
+
+
+def uninstall_hooks():
+    return hooks.uninstall_hooks()
+
+
+_USER_CMD = "/my/own/script.sh"
+
+
+def _group(command, matcher=None) -> dict:
+    g = {"hooks": [{"type": "command", "command": command}]}
+    if matcher is not None:
+        g = {"matcher": matcher, **g}
+    return g
+
+
+def test_uninstall_removes_every_group_install_added(settings_path):
+    install_hooks()
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {}
+
+
+def test_uninstall_preserves_user_hook_on_the_same_event(settings_path):
+    settings_path.write_text(json.dumps({"hooks": {"SessionStart": [_group(_USER_CMD)]}}))
+    install_hooks()
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {"hooks": {"SessionStart": [_group(_USER_CMD)]}}
+
+
+def test_uninstall_preserves_a_group_shared_with_a_user_command(settings_path):
+    """A group mixing the user's command with ours is the user's: install never
+    prunes it, so uninstall must not touch it either."""
+    shared = {"hooks": [
+        {"type": "command", "command": _USER_CMD},
+        {"type": "command", "command": hooks.HOOK_COMMAND},
+    ]}
+    settings_path.write_text(json.dumps({"hooks": {"Stop": [shared]}}))
+    install_hooks()
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {"hooks": {"Stop": [shared]}}
+
+
+def test_uninstall_preserves_unrelated_settings_keys(settings_path):
+    settings_path.write_text(json.dumps({
+        "model": "opus",
+        "permissions": {"allow": ["Bash(ls)"]},
+        "statusLine": {"type": "command", "command": "x"},
+    }))
+    install_hooks()
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {
+        "model": "opus",
+        "permissions": {"allow": ["Bash(ls)"]},
+        "statusLine": {"type": "command", "command": "x"},
+    }
+
+
+def test_uninstall_keeps_a_user_event_list_that_was_already_empty(settings_path):
+    """Only lists we emptied are dropped; an empty list the user wrote stays."""
+    settings_path.write_text(json.dumps({"hooks": {"Custom": []}}))
+    install_hooks()
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {"hooks": {"Custom": []}}
+
+
+def test_uninstall_keeps_a_hooks_object_the_user_left_empty(settings_path):
+    settings_path.write_text(json.dumps({"model": "opus", "hooks": {}}))
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {"model": "opus", "hooks": {}}
+
+
+def test_uninstall_removes_our_group_from_an_unmanaged_event(settings_path):
+    """'Every event', not just the ones HOOKS_CONFIG lists today: an event we
+    used to register and later dropped must not keep calling a removed exe."""
+    settings_path.write_text(json.dumps({"hooks": {
+        "RetiredEvent": [_group(hooks.HOOK_COMMAND)],
+    }}))
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {}
+
+
+def test_uninstall_is_idempotent(settings_path):
+    settings_path.write_text(json.dumps({"model": "opus"}))
+    install_hooks()
+    assert uninstall_hooks() is True
+    first = settings_path.read_bytes()
+    assert uninstall_hooks() is True
+    assert settings_path.read_bytes() == first
+
+
+def test_uninstall_without_our_hooks_leaves_the_file_byte_identical(settings_path):
+    raw = b'{"model":"opus",  "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "x"}]}]}}'
+    settings_path.write_bytes(raw)
+    assert uninstall_hooks() is True
+    assert settings_path.read_bytes() == raw
+
+
+def test_uninstall_with_no_settings_file_creates_nothing(settings_path):
+    assert uninstall_hooks() is True
+    assert not settings_path.exists()
+
+
+@pytest.mark.parametrize("raw", [
+    b'{"model": "opus",}',
+    b'["not", "an", "object"]',
+    b'{"model": "\xff\xfe opus"}',
+])
+def test_uninstall_leaves_unparseable_settings_untouched(settings_path, raw):
+    settings_path.write_bytes(raw)
+    assert uninstall_hooks() is False
+    assert settings_path.read_bytes() == raw
+
+
+def test_uninstall_tolerates_malformed_hook_values(settings_path):
+    settings = {"hooks": {"Stop": None, "SessionStart": [{"hooks": None}, "junk"]}}
+    settings_path.write_text(json.dumps(settings))
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == settings
+
+
+def test_uninstall_leaves_a_non_object_hooks_value_alone(settings_path):
+    settings_path.write_text(json.dumps({"hooks": None, "model": "opus"}))
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {"hooks": None, "model": "opus"}
+
+
+def test_uninstall_keeps_matchers_and_order_of_user_groups(settings_path):
+    user_a = _group("/a.sh", matcher="Bash")
+    user_b = _group("/b.sh")
+    settings_path.write_text(json.dumps({"hooks": {"PreToolUse": [
+        user_a, _group(hooks.HOOK_COMMAND), user_b,
+    ]}}))
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {"hooks": {"PreToolUse": [user_a, user_b]}}
+
+
+def test_uninstall_does_not_remove_a_wrapper_around_our_script(settings_path):
+    wrapper = f"cat {hooks.NOTIFY_SCRIPT_PATH}"
+    settings_path.write_text(json.dumps({"hooks": {"Stop": [_group(wrapper)]}}))
+    assert uninstall_hooks() is True
+    assert _commands_for(_read(settings_path), "Stop") == [wrapper]
+
+
+def test_uninstall_preserves_non_ascii_user_settings(settings_path):
+    settings_path.write_text(json.dumps(_NON_ASCII_SETTINGS, ensure_ascii=False),
+                             encoding="utf-8")
+    install_hooks()
+    assert uninstall_hooks() is True
+    assert json.loads(settings_path.read_text(encoding="utf-8")) == _NON_ASCII_SETTINGS
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows command form")
+@pytest.mark.parametrize("stale", [
+    "stale-interpreter",
+    '"D:\\Old Place\\MargaritaTank\\margarita-notify.exe"',
+    f'"{_FROZEN_NOTIFY}"',
+])
+def test_uninstall_removes_stale_variants_of_our_command(settings_path, stale):
+    """Groups left by another interpreter, another install folder or the packaged
+    build are ours too — install prunes them, so uninstall must as well."""
+    if stale == "stale-interpreter":
+        stale = f'"C:\\gone\\python.exe" "{hooks.NOTIFY_SCRIPT_PATH}"'
+    settings_path.write_text(json.dumps({"hooks": {"SessionStart": [
+        _group(stale), _group(_USER_CMD),
+    ]}}))
+    assert uninstall_hooks() is True
+    assert _read(settings_path) == {"hooks": {"SessionStart": [_group(_USER_CMD)]}}

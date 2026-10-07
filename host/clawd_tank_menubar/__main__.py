@@ -6,7 +6,49 @@ Runnable in a dev checkout on either platform without a packaged build —
 app.py (which imports rumps) is only imported on darwin, so this module
 itself has no import-time platform dependency.
 """
+import logging
 import sys
+from pathlib import Path
+
+LOG_DIR = Path.home() / ".clawd-tank" / "logs"
+LOG_FORMAT = "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+
+# Run by the Windows uninstaller before it deletes the notify exe, so Claude
+# Code is not left invoking a program that no longer exists on every hook.
+UNINSTALL_HOOKS_FLAG = "--uninstall-hooks"
+
+
+def _uninstall_hooks() -> int:
+    """Remove our Claude Code hooks and return the process exit code.
+
+    Starts neither the tray nor the daemon. Logs to the usual log file, through
+    a handler removed again before returning, since a packaged windowed build
+    has no console to report to.
+    """
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(LOG_DIR / "clawd-tank.log", encoding="utf-8")
+    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    app_logger = logging.getLogger("clawd-tank")
+    previous_level = app_logger.level
+    app_logger.addHandler(handler)
+    app_logger.setLevel(logging.INFO)
+    logger = logging.getLogger("clawd-tank.menubar")
+    try:
+        from . import hooks
+        try:
+            removed = hooks.uninstall_hooks()
+        except Exception:
+            logger.exception("Uninstalling Claude Code hooks failed")
+            return 1
+        if removed:
+            logger.info("Uninstalled Claude Code hooks")
+            return 0
+        logger.error("Claude Code hooks were not uninstalled")
+        return 1
+    finally:
+        app_logger.removeHandler(handler)
+        app_logger.setLevel(previous_level)
+        handler.close()
 
 
 def _run_macos() -> None:
@@ -15,14 +57,10 @@ def _run_macos() -> None:
 
 
 def _run_windows() -> None:
-    import logging
-    import sys
     import traceback
-    from pathlib import Path
 
-    log_dir = Path.home() / ".clawd-tank" / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "clawd-tank.log"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = LOG_DIR / "clawd-tank.log"
 
     # A packaged (PyInstaller, console=False) build has no console, and
     # sys.stdout/sys.stderr are not readable/writable streams in that mode
@@ -39,7 +77,7 @@ def _run_windows() -> None:
         handlers.append(logging.StreamHandler())
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        format=LOG_FORMAT,
         handlers=handlers,
     )
     logger = logging.getLogger("clawd-tank.menubar")
@@ -74,6 +112,8 @@ def _run_windows() -> None:
 
 
 def main() -> None:
+    if UNINSTALL_HOOKS_FLAG in sys.argv[1:]:
+        sys.exit(_uninstall_hooks())
     if sys.platform == "darwin":
         _run_macos()
     else:

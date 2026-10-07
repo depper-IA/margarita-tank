@@ -20,8 +20,8 @@ from typing import Callable, Optional, Protocol
 
 from clawd_tank_daemon.daemon import ClawdDaemon, DaemonObserver
 
-from . import autostart, hooks
-from .preferences import PREFS_PATH, load_preferences, save_preferences
+from . import autostart, hooks, preferences
+from .preferences import load_preferences, save_preferences
 
 logger = logging.getLogger("clawd-tank.menubar")
 
@@ -90,12 +90,12 @@ class ClawdTankController(DaemonObserver):
         self,
         view: TrayView,
         *,
-        prefs_path: Path = PREFS_PATH,
+        prefs_path: Optional[Path] = None,
         sim_process_factory: Optional[Callable] = None,
         force_exit: Callable[[int], None] = os._exit,
     ):
         self._view = view
-        self._prefs_path = prefs_path
+        self._prefs_path = preferences.PREFS_PATH if prefs_path is None else prefs_path
         self._sim_process_factory = sim_process_factory or _default_sim_process_factory
         self._force_exit = force_exit
 

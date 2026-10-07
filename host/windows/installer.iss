@@ -16,6 +16,8 @@
 #define AppName "Margarita Tank"
 #define AppExeName "MargaritaTank.exe"
 #define BuildDir "..\dist\MargaritaTank"
+#define SimProcessName "clawd-tank-sim"
+#define PowerShell "{sys}\WindowsPowerShell\v1.0\powershell.exe"
 
 [Setup]
 ; Never change AppId: it is how upgrades and the uninstaller find an install.
@@ -68,8 +70,14 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#AppExeName}"; Flags: runhidden; RunOnceId: "KillTray"
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM clawd-tank-sim.exe"; Flags: runhidden; RunOnceId: "KillSim"
+; Runs in this order, before any file is deleted. Stop the tray first so its
+; daemon cannot re-register hooks, then remove our Claude Code hook groups
+; while MargaritaTank.exe still exists; otherwise Claude Code keeps invoking
+; the deleted margarita-notify.exe on every hook event. Finally stop only the
+; simulator this install shipped, not a development build of it.
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#AppExeName}"; Flags: runhidden waituntilterminated; RunOnceId: "KillTray"
+Filename: "{app}\{#AppExeName}"; Parameters: "--uninstall-hooks"; Flags: runhidden waituntilterminated; RunOnceId: "UninstallHooks"
+Filename: "{#PowerShell}"; Parameters: "{code:KillSimParams}"; Flags: runhidden waituntilterminated; RunOnceId: "KillSim"
 
 [Code]
 procedure KillImage(const ImageName: String);
@@ -80,11 +88,37 @@ begin
        SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
+// PowerShell arguments that stop only the simulator processes whose image lives
+// under {app}. `taskkill /IM` matches by name alone and would also kill a
+// simulator a developer is running from a source checkout. StartsWith rather
+// than -like, whose [ ] wildcards a folder name could contain; the folder is
+// embedded as a single-quoted PowerShell literal, so its own quotes are doubled.
+function KillSimParams(Param: String): String;
+var
+  AppDir: String;
+begin
+  AppDir := AddBackslash(ExpandConstant('{app}'));
+  StringChangeEx(AppDir, '''', '''''', True);
+  Result := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' +
+    '$d = ''' + AppDir + '''; ' +
+    'Get-Process -Name {#SimProcessName} -ErrorAction SilentlyContinue | ' +
+    'Where-Object { $_.Path -and $_.Path.StartsWith($d, [StringComparison]::OrdinalIgnoreCase) } | ' +
+    'Stop-Process -Force; exit 0"';
+end;
+
+procedure KillSimUnderApp;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{#PowerShell}'), KillSimParams(''), '',
+       SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   // A running tray (or its simulator) locks files in {app}; stop both so an
   // upgrade can overwrite them. The user relaunches from the last wizard page.
   KillImage('{#AppExeName}');
-  KillImage('clawd-tank-sim.exe');
+  KillSimUnderApp;
   Result := '';
 end;

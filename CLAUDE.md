@@ -101,6 +101,8 @@ cd host && .venv/Scripts/python.exe -m PyInstaller windows/margarita_tank.spec -
 
 `margarita-notify.exe` is a console exe running the same stdlib-only notify script (`hooks.NOTIFY_SCRIPT`); a frozen build points the Claude Code hooks at it, because `sys.executable` is the tray exe there, not Python. The spec bundles `simulator/build-static/clawd-tank-sim.exe` (or `simulator/build/`) when present.
 
+Uninstalling runs `MargaritaTank.exe --uninstall-hooks` (after killing the tray, before files are deleted), which calls `hooks.uninstall_hooks()` and exits without starting the tray or daemon: it removes only our hook groups from `~/.claude/settings.json` (same ownership rule `install_hooks()` prunes with), so Claude Code is not left calling a deleted `margarita-notify.exe`. The flag works on macOS too. The installer stops only the `clawd-tank-sim.exe` processes running from `{app}`, never a dev build.
+
 ### Releases
 
 `.github/workflows/release.yml` runs on a `vX.Y.Z` tag push (or a release published from the UI) and attaches `Margarita-Tank.dmg` and `Margarita-Tank-Setup.exe` to the release. Asset names are unversioned so the README links to `releases/latest/download/<asset>`.
