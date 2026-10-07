@@ -158,9 +158,11 @@ cmake --build build
 
 ```bash
 cd host
-pip install -r requirements.txt
-python -m clawd_tank_daemon --sim        # con simulador
-python -m clawd_tank_daemon              # con BLE (busca "Margarita")
+python -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt        # Windows: .venv\Scripts\pip
+.venv/bin/python -m clawd_tank_daemon.daemon --sim   # con simulador
+.venv/bin/python -m clawd_tank_daemon.daemon         # con BLE (busca "Margarita")
+.venv/bin/python -m clawd_tank_menubar               # app de barra de menú / bandeja
 ```
 
 ## `$ ./configurar`
@@ -179,7 +181,7 @@ Para renombrar el dispositivo, cambia el nombre en un solo lugar por capa:
 
 ```bash
 # Tests del host (daemon + protocolo)
-cd host && .venv/bin/pytest -v
+cd host && .venv/bin/python -m pytest -v   # Windows: .venv\Scripts\python -m pytest -v
 
 # Tests C del firmware (notification store)
 cd firmware/test && make test
