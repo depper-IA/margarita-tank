@@ -24,6 +24,14 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 
 ---
 
+## BLE auto-reconnect (scan error killed the sender) — Fixed (live hardware untested)
+
+- [x] Root cause: a first-scan `BleakError` (macOS TCC check still running at app start) escaped `_connect_until_found` and ended `_transport_sender` silently. Scan errors are now retried with back-off, and `_transport_sender` restarts after a crash (logged with traceback).
+- [x] Log lines: scan failures (WARNING, first and every 6th), "not found after N scans" (INFO, every 6th).
+- [ ] Restart the installed app with the board in range and check the log: first scan may log `BLE scan failed ... retrying in 1s`, then `Found Margarita` and `Transport 'ble' connected` with no click on Reconnect.
+- [ ] Switch the board off and on (or walk out of range) and check it reconnects by itself within a few seconds.
+- [ ] Known leftover: `ClawdBleClient.disconnect()` awaits bleak's `disconnect()` with no timeout (only the manual Reconnect path uses it on a live link).
+
 ## Claude Code mod (side panel) — Implemented (Windows and a real Claude session untested)
 
 - [x] `claude-mod/margarita-band/` added to the repo and bundled (py2app `DATA_FILES`, PyInstaller `datas`; the release workflow checks both).
@@ -38,7 +46,9 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 - [x] Bridge script (`hooks.STATUSLINE_BRIDGE_SCRIPT`) caches `rate_limits` atomically and chains the user's original statusLine.
 - [x] `install_hooks()` / `uninstall_hooks()` wire and restore `statusLine`; `are_hooks_installed()` reports outdated until it is wired.
 - [x] `margarita-statusline.exe` added to the PyInstaller spec and the release workflow check.
-- [ ] Verify the frozen Windows build end to end (statusLine run by Claude Code on Windows).
+- [x] macOS/Linux run `hooks.STATUSLINE_BRIDGE_SH` (plain `sh`, no python3) instead of the Python bridge; the original command is mirrored to `statusline-original.txt`, and an install wired to `statusline_bridge.py` is migrated on start.
+- [x] Windows: the original statusLine is chained through Git Bash (`CLAUDE_CODE_GIT_BASH_PATH`, else the bash next to `git`) instead of cmd.exe, falling back to cmd.exe; only the selection is unit-tested (platform strings), not run on Windows.
+- [ ] Verify the frozen Windows build end to end (statusLine run by Claude Code on Windows, including the Git Bash chaining).
 
 ## Phase 1 new crab animations — Implemented (not yet flashed)
 
@@ -82,9 +92,10 @@ Proposed behaviour:
   (`downgrade_display_state`, `MIN_PROTOCOL_FOR_...`).
 - [ ] Flash the board and check it on hardware (the simulator compiles the same sources, so
   it can be checked there first).
-- [ ] Claude Code mod (`margarita-band`, lives outside this repo in `~/.claude/dev-mods/`):
-  mirror the same state — happy for ~4 s after the turn, then a looping waiting pose with
-  the text `esperando tu respuesta` until the next prompt.
+- [x] Claude Code mod (`margarita-band`, `claude-mod/margarita-band/`) already mirrors it:
+  `happy` for 8 ticks (~3.6 s) after the turn, then a looping `waiting_reply` pose with the
+  text `esperando tu respuesta` until the next prompt (`hooks/select.ts`, covered by
+  `hooks/select.test.ts`).
 
 ## Windows Claude PID resolution — Complete
 

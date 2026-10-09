@@ -1,7 +1,8 @@
 import asyncio
 import json
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from bleak.exc import BleakError
 from clawd_tank_daemon.daemon import ClawdDaemon
 
 
@@ -885,3 +886,256 @@ def test_headless_lock_conflict_exits_without_retry(monkeypatch, tmp_path):
     assert exc.value.code == 0
     assert len(calls) == 1
     assert sleeps == []
+
+
+# --- A failing connect must not end the sender task ---
+#
+# Field bug: on macOS the first BLE scan of a fresh process raised bleak's
+# BleakError("Bluetooth device is turned off") (the TCC privacy check is still
+# running). Nothing caught it: _transport_sender died, its task sat unobserved
+# in _sender_tasks, and from then on the transport never reconnected by itself
+# and its queue was never drained. Only the menu's Reconnect item (which calls
+# ensure_connected() directly) brought the board back.
+
+
+async def _wait_until(predicate, timeout: float, what: str) -> None:
+    """Poll with real sleeps until ``predicate()`` holds, or fail."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() > deadline:
+            pytest.fail(f"timed out waiting for {what}")
+        await asyncio.sleep(0.01)
+
+
+async def _stop_sender(daemon, sender: asyncio.Task) -> None:
+    daemon._running = False
+    sender.cancel()
+    try:
+        await sender
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
+def _flaky_transport(daemon, failures: int, error: Exception):
+    """A transport whose first ``failures`` ensure_connected() calls raise."""
+    transport = AsyncMock()
+    transport.is_connected = False
+    transport.writes = []
+    attempts = {"n": 0}
+
+    async def ensure_connected():
+        attempts["n"] += 1
+        if attempts["n"] <= failures:
+            raise error
+        transport.is_connected = True
+
+    async def write(payload):
+        transport.writes.append(json.loads(payload))
+        return True
+
+    transport.ensure_connected = AsyncMock(side_effect=ensure_connected)
+    transport.write_notification = write
+    transport.attempts = attempts
+    daemon._transports["ble"] = transport
+    return transport
+
+
+@pytest.mark.asyncio
+async def test_transport_sender_survives_a_failing_initial_connect(monkeypatch):
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    monkeypatch.setattr(daemon_mod, "SENDER_RESTART_BASE_SECS", 0.01, raising=False)
+    daemon = ClawdDaemon()
+    transport = _flaky_transport(
+        daemon, failures=1, error=BleakError("Bluetooth device is turned off")
+    )
+
+    sender = asyncio.create_task(daemon._transport_sender("ble"))
+    try:
+        await _wait_until(
+            lambda: sender.done()
+            or any(w.get("action") == "set_time" for w in transport.writes),
+            timeout=2,
+            what="the sender to connect and sync the board",
+        )
+        assert not sender.done(), f"sender task died: {sender.exception()!r}"
+    finally:
+        await _stop_sender(daemon, sender)
+
+    assert transport.attempts["n"] == 2
+    assert any(w.get("action") == "set_time" for w in transport.writes)
+
+
+@pytest.mark.asyncio
+async def test_transport_sender_survives_a_failing_reconnect(monkeypatch):
+    """Once connected, a later reconnect attempt that raises (the link dropped
+    and the scan failed) must not end the sender either."""
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    monkeypatch.setattr(daemon_mod, "SENDER_RESTART_BASE_SECS", 0.01, raising=False)
+    monkeypatch.setattr(daemon_mod, "SENDER_IDLE_POLL_SECS", 0.01, raising=False)
+    daemon = ClawdDaemon()
+    transport = _flaky_transport(daemon, failures=0, error=RuntimeError("unused"))
+    reconnects = {"n": 0}
+
+    async def ensure_connected():
+        if not transport.is_connected:
+            reconnects["n"] += 1
+            if reconnects["n"] == 1:
+                raise BleakError("Bluetooth device is turned off")
+            transport.is_connected = True
+
+    transport.ensure_connected = AsyncMock(side_effect=ensure_connected)
+    transport.is_connected = True
+
+    sender = asyncio.create_task(daemon._transport_sender("ble"))
+    try:
+        await _wait_until(
+            lambda: sender.done() or transport.writes, timeout=2, what="first sync"
+        )
+        transport.writes.clear()
+        transport.is_connected = False  # the link drops
+        await _wait_until(
+            lambda: sender.done()
+            or any(w.get("action") == "set_time" for w in transport.writes),
+            timeout=2,
+            what="the sender to reconnect and sync again",
+        )
+        assert not sender.done(), f"sender task died: {sender.exception()!r}"
+    finally:
+        await _stop_sender(daemon, sender)
+
+    assert reconnects["n"] == 2
+
+
+@pytest.mark.asyncio
+async def test_transport_sender_survives_a_failing_message(monkeypatch):
+    """One message whose delivery raises must not stop the ones behind it."""
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    monkeypatch.setattr(daemon_mod, "SENDER_RESTART_BASE_SECS", 0.01, raising=False)
+    daemon = ClawdDaemon()
+    transport = AsyncMock()
+    transport.is_connected = True
+    transport.ensure_connected = AsyncMock()
+    delivered = []
+
+    async def write(payload):
+        data = json.loads(payload)
+        if data.get("id") == "bad":
+            raise RuntimeError("boom")
+        delivered.append(data)
+        return True
+
+    transport.write_notification = write
+    daemon._transports["ble"] = transport
+    for sid in ("bad", "good"):
+        await daemon._transport_queues["ble"].put(
+            {"event": "add", "session_id": sid, "project": "p", "message": "m"}
+        )
+
+    sender = asyncio.create_task(daemon._transport_sender("ble"))
+    try:
+        await _wait_until(
+            lambda: sender.done() or any(d.get("id") == "good" for d in delivered),
+            timeout=2,
+            what="the message behind the failing one to be delivered",
+        )
+        assert not sender.done(), f"sender task died: {sender.exception()!r}"
+    finally:
+        await _stop_sender(daemon, sender)
+
+    assert any(d.get("id") == "good" for d in delivered)
+
+
+@pytest.mark.asyncio
+async def test_transport_sender_backs_off_and_logs_each_crash(caplog):
+    """Repeated failures are logged with their traceback, and the sender waits
+    longer each time (up to a cap) instead of retrying in a tight loop."""
+    delays: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(delay, result=None):
+        delays.append(delay)
+        await real_sleep(0)
+        return result
+
+    daemon = ClawdDaemon()
+    failures = 8
+    transport = _flaky_transport(
+        daemon, failures=failures, error=BleakError("Bluetooth device is turned off")
+    )
+
+    with caplog.at_level("ERROR", logger="clawd-tank"), patch.object(
+        asyncio, "sleep", fake_sleep
+    ):
+        sender = asyncio.create_task(daemon._transport_sender("ble"))
+        try:
+            for _ in range(500):
+                if sender.done() or transport.writes:
+                    break
+                await real_sleep(0)
+            assert not sender.done(), f"sender task died: {sender.exception()!r}"
+        finally:
+            await _stop_sender(daemon, sender)
+
+    restarts = [d for d in delays if d >= 0.5]
+    assert len(restarts) == failures
+    assert restarts == sorted(restarts)
+    assert restarts[0] < restarts[-1]
+    assert max(restarts) <= 30
+    crashes = [r for r in caplog.records if r.exc_info and "ble" in r.getMessage()]
+    assert len(crashes) == failures
+
+
+@pytest.mark.asyncio
+async def test_ble_connects_and_reconnects_by_itself_after_a_scan_error(monkeypatch):
+    """The user-visible symptom end to end, with a real ClawdBleClient and
+    faked bleak: the first scan raises, the board must still be found without
+    touching the menu, and a later link drop must be recovered the same way."""
+    import clawd_tank_daemon.ble_client as ble_client
+    import clawd_tank_daemon.daemon as daemon_mod
+    from clawd_tank_daemon.ble_client import ClawdBleClient
+
+    monkeypatch.setattr(ble_client, "SCAN_ERROR_RETRY_BASE_SECS", 0.01, raising=False)
+    monkeypatch.setattr(daemon_mod, "SENDER_IDLE_POLL_SECS", 0.05, raising=False)
+
+    def bleak_client() -> MagicMock:
+        c = MagicMock()
+        c.connect = AsyncMock()
+        c.disconnect = AsyncMock()
+        c.is_connected = True
+        c.mtu_size = 256
+        c.write_gatt_char = AsyncMock()
+        c.read_gatt_char = AsyncMock(return_value=b"3")
+        return c
+
+    first, second = bleak_client(), bleak_client()
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    scan = AsyncMock(
+        side_effect=[BleakError("Bluetooth device is turned off"), device, device]
+    )
+    daemon = ClawdDaemon(headless=False)
+    client = ClawdBleClient()
+
+    with patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name", scan
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakClient", side_effect=[first, second]
+    ):
+        await daemon.add_transport("ble", client)
+        try:
+            await _wait_until(
+                lambda: client._client is first,
+                timeout=3,
+                what="the first automatic connection",
+            )
+            first.is_connected = False  # CoreBluetooth reports the link lost
+            client._on_disconnect(first)
+            await _wait_until(
+                lambda: client._client is second,
+                timeout=3,
+                what="the automatic reconnection after the link dropped",
+            )
+        finally:
+            await daemon.remove_transport("ble")

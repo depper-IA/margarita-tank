@@ -27,12 +27,18 @@ NOTIFY_SCRIPT_PATH = CLAWD_DIR / (
 )
 CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
 
-# The statusLine bridge keeps the same file name on every platform: it is always
-# run through an explicit interpreter on Windows and via its shebang on POSIX.
-STATUSLINE_SCRIPT_PATH = CLAWD_DIR / "statusline_bridge.py"
+# Windows runs the Python bridge through an explicit interpreter, so it needs the
+# .py suffix; macOS and Linux run a plain sh script and need no Python at all.
+LEGACY_STATUSLINE_SCRIPT_NAME = "statusline_bridge.py"  # what POSIX ran before the sh bridge
+STATUSLINE_SCRIPT_PATH = CLAWD_DIR / (
+    LEGACY_STATUSLINE_SCRIPT_NAME if sys.platform == "win32" else "statusline_bridge.sh"
+)
 # The user's pre-existing statusLine, saved so the bridge can chain it and
 # uninstall can restore it exactly.
 STATUSLINE_STATE_NAME = "statusline-original.json"
+# The same saved command as plain text, written verbatim. The POSIX sh bridge
+# reads this instead of picking the string out of the JSON: it has no JSON parser.
+STATUSLINE_COMMAND_NAME = "statusline-original.txt"
 STATUSLINE_EXE_NAME = "margarita-statusline.exe"
 
 # Standalone hook script — uses only Python stdlib, no external imports.
@@ -326,8 +332,9 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         main()
 ''').replace("__DISPLAY_NAME__", repr(DISPLAY_NAME))
 
-# File name of the console-subsystem notify exe that the Windows PyInstaller
-# build ships next to the tray exe (see host/windows/margarita_tank.spec).
+# The statusLine bridge for Windows (STATUSLINE_BRIDGE_SH below is the POSIX one):
+# stdlib-only Python, installed as statusline_bridge.py and frozen into
+# margarita-statusline.exe by the PyInstaller build (see host/windows/margarita_tank.spec).
 STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
     #!/usr/bin/env python3
     """statusline_bridge - Claude Code statusLine wrapper for Clawd Tank.
@@ -342,6 +349,7 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
     # STATUSLINE_BRIDGE_VERSION: 1
 
     import json
+    import ntpath
     import os
     import subprocess
     import sys
@@ -352,6 +360,7 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
     CACHE_PATH = CLAWD_DIR / "statusline-cache.json"
     STATE_PATH = CLAWD_DIR / "statusline-original.json"
     GUARD_ENV = "CLAWD_TANK_STATUSLINE_BRIDGE"
+    GIT_BASH_ENV = "CLAUDE_CODE_GIT_BASH_PATH"
     CHAIN_TIMEOUT_S = 10
 
 
@@ -384,13 +393,93 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
             return None
 
 
+    def _is_absolute(path):
+        # A drive (or UNC share) AND a root: "C:foo" and "\\\\foo" resolve against
+        # the current directory or drive, which is where a project can plant files.
+        drive, rest = ntpath.splitdrive(path)
+        return bool(drive) and rest[:1] in ("\\\\", "/")
+
+    def _same_path(a, b):
+        return ntpath.normcase(ntpath.normpath(a)) == ntpath.normcase(ntpath.normpath(b))
+
+    def _trusted_path_dirs(environ, cwd):
+        """Absolute PATH entries that are not the current directory, in order.
+        The bridge runs in the user's project: shutil.which on Windows also looks
+        in the cwd (and an empty or relative entry means the cwd), so a repository
+        could plant its own git.exe there and have it executed."""
+        raw = next((v for k, v in environ.items() if k.upper() == "PATH"), "") or ""
+        for entry in raw.split(";"):
+            entry = entry.strip().strip('"')
+            if entry and _is_absolute(entry) and not _same_path(entry, cwd):
+                yield entry
+
+    # Where bash.exe sits relative to the folder holding git.exe, by that folder's
+    # name: Git for Windows has git.exe in cmd, mingw64/bin or bin (bash.exe is
+    # in the install's bin folder, or next to git.exe when that is bin itself).
+    def _bash_folder(git_dir):
+        name = ntpath.basename(git_dir).lower()
+        if name == "cmd":
+            return ntpath.join(git_dir, "..", "bin")
+        if name == "bin":
+            parent = ntpath.basename(ntpath.dirname(git_dir)).lower()
+            if parent in ("mingw64", "mingw32", "clangarm64"):
+                return ntpath.join(git_dir, "..", "..", "bin")
+            return git_dir
+        return None
+
+    def _is_bash_exe(path, isfile):
+        return (isinstance(path, str) and _is_absolute(path)
+                and ntpath.basename(path).lower() == "bash.exe" and isfile(path))
+
+    def find_git_bash(environ, isfile, cwd):
+        """The Git Bash that Claude Code runs statusLine commands through on Windows:
+        the one named by CLAUDE_CODE_GIT_BASH_PATH (an absolute path to an existing
+        bash.exe), else the bash.exe of the Git for Windows install whose git.exe is
+        on PATH. git is looked up only in absolute PATH entries other than `cwd`,
+        never through shutil.which (it searches the cwd). Never a bash found on PATH
+        itself: System32/bash.exe is the WSL launcher and would run the command in
+        Linux. None when there is no Git Bash."""
+        configured = environ.get(GIT_BASH_ENV)
+        if configured and _is_bash_exe(configured, isfile):
+            return configured
+        for directory in _trusted_path_dirs(environ, cwd):
+            if not isfile(ntpath.join(directory, "git.exe")):
+                continue
+            folder = _bash_folder(directory)
+            if folder is None:
+                continue
+            candidate = ntpath.normpath(ntpath.join(folder, "bash.exe"))
+            if _is_bash_exe(candidate, isfile):
+                return candidate
+        return None
+
+
+    def chain_invocation(command, platform=None, environ=None, isfile=None, cwd=None):
+        """(args, shell) for subprocess.run to chain `command` through.
+
+        The user's original was written for the shell Claude Code runs it with. On
+        Windows that is Git Bash, not cmd.exe, so use it ([bash, "-c", command]);
+        cmd.exe (shell=True) is only the fallback when no Git Bash is found.
+        Elsewhere shell=True is /bin/sh, which is what Claude Code uses too."""
+        if (sys.platform if platform is None else platform) == "win32":
+            bash = find_git_bash(
+                os.environ if environ is None else environ,
+                os.path.isfile if isfile is None else isfile,
+                os.getcwd() if cwd is None else cwd,
+            )
+            if bash:
+                return [bash, "-c", command], False
+        return command, True
+
+
     def chain(command, raw):
         # A bridge that finds itself as the "original" would fork forever.
         if os.environ.get(GUARD_ENV):
             return
         try:
+            args, shell = chain_invocation(command)
             proc = subprocess.run(
-                command, shell=True, input=raw, stdout=subprocess.PIPE,
+                args, shell=shell, input=raw, stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, timeout=CHAIN_TIMEOUT_S,
                 env={**os.environ, GUARD_ENV: "1"},
             )
@@ -419,6 +508,91 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
         sys.exit(0)
 ''')
 
+
+# The same bridge for macOS and Linux, in plain POSIX sh. The Python one above
+# needs a working python3, and a Mac may have none (or only the Xcode command
+# line tools stub): a statusLine that cannot start would take the user's own
+# status line down with it. Windows keeps the Python bridge (margarita-statusline.exe).
+STATUSLINE_BRIDGE_SH = textwrap.dedent('''\
+    #!/bin/sh
+    # statusline_bridge - Claude Code statusLine wrapper for Clawd Tank (macOS, Linux).
+    #
+    # Claude Code pipes a JSON document (including rate_limits) to the statusLine
+    # command on every refresh. This script caches that JSON for the daemon's usage
+    # bar, then runs the user's original statusLine command (saved verbatim by the
+    # installer in statusline-original.txt) with the same stdin and prints its
+    # output, so their status line keeps working.
+    #
+    # POSIX sh plus cat, mkdir, mv, rm and sleep: no Python and no jq. It must never
+    # fail loudly: stderr is discarded and the exit code is always 0.
+    #
+    # Limits: the original is stopped with SIGTERM after CLAWD_TANK_STATUSLINE_TIMEOUT
+    # seconds (default 10), together with its direct children when pgrep exists; a
+    # deeper process tree can outlive it. The input is held in a shell variable, so
+    # NUL bytes are dropped (a JSON document has none).
+    # STATUSLINE_BRIDGE_VERSION: 1
+
+    exec 2>/dev/null
+
+    DIR=${CLAWD_TANK_DIR:-${HOME:+$HOME/.clawd-tank}}
+    CACHE="$DIR/statusline-cache.json"
+    SAVED="$DIR/statusline-original.txt"
+    TIMEOUT=${CLAWD_TANK_STATUSLINE_TIMEOUT:-10}
+    case $TIMEOUT in ''|.|*[!0-9.]*) TIMEOUT=10 ;; esac
+
+    # Everything Claude Code sent, byte for byte (the x keeps the trailing newlines).
+    INPUT=$(cat; printf x)
+    INPUT=${INPUT%x}
+
+    write_cache() {
+        [ -n "$DIR" ] || return 0
+        # Only a JSON object is cached: its first non-blank character is a brace.
+        lead=${INPUT%%[![:space:]]*}
+        case ${INPUT#"$lead"} in '{'*) ;; *) return 0 ;; esac
+        [ ! -d "$CACHE" ] || return 0
+        mkdir -p "$DIR" || return 0
+        tmp="$CACHE.$$.tmp"
+        # A temp file in the same folder and mv replace the cache atomically; the
+        # umask keeps it private to the user.
+        if ( umask 077 && printf '%s' "$INPUT" >"$tmp" ) && mv -f "$tmp" "$CACHE"; then
+            :
+        else
+            rm -f "$tmp"
+        fi
+    }
+
+    run_original() {
+        # The payload arrives on stdin; a background job would get /dev/null.
+        exec 3<&0
+        CLAWD_TANK_STATUSLINE_BRIDGE=1 /bin/sh -c "$COMMAND" <&3 3<&- &
+        child=$!
+        (
+            trap 'kill "$sleeper"; exit 0' TERM
+            sleep "$TIMEOUT" &
+            sleeper=$!
+            wait "$sleeper"
+            # Note the children first: once the parent dies they are re-parented.
+            kids=$(pgrep -P "$child")
+            kill "$child" $kids
+        ) >/dev/null 2>&1 3<&- </dev/null &
+        watchdog=$!
+        wait "$child"
+        kill "$watchdog"
+    }
+
+    write_cache
+
+    # A bridge that finds itself as the "original" would fork forever.
+    [ -z "$CLAWD_TANK_STATUSLINE_BRIDGE" ] || exit 0
+    [ -n "$DIR" ] && [ -r "$SAVED" ] || exit 0
+    COMMAND=$(cat "$SAVED")
+    case $COMMAND in *[![:space:]]*) ;; *) exit 0 ;; esac
+    printf '%s' "$INPUT" | run_original
+    exit 0
+''')
+
+# File name of the console-subsystem notify exe that the Windows PyInstaller
+# build ships next to the tray exe (see host/windows/margarita_tank.spec).
 NOTIFY_EXE_NAME = "margarita-notify.exe"
 
 
@@ -452,20 +626,27 @@ HOOK_COMMAND = build_hook_command(
 )
 
 
+def build_statusline_script(platform: str) -> str:
+    """The bridge script to install on `platform`: Windows keeps the Python one
+    (also frozen into margarita-statusline.exe), everywhere else it is plain sh,
+    so the user's statusLine never depends on a working python3."""
+    return STATUSLINE_BRIDGE_SCRIPT if platform == "win32" else STATUSLINE_BRIDGE_SH
+
+
 def build_statusline_command(platform: str, frozen: bool, executable: str, script_path) -> str:
     """The statusLine command that runs the bridge on `platform`.
 
-    Same rules as build_hook_command(): POSIX runs the executable script through
-    its shebang (shell-quoted, since this one is a shell command line that may
-    sit under a home directory with spaces); Windows names the interpreter, or
-    runs the bundled console exe when frozen.
+    POSIX runs the sh script through /bin/sh, so it works even if the file lost
+    its execute bit (the path is shell-quoted: this is a shell command line that
+    may sit under a home directory with spaces). Windows names the interpreter,
+    like build_hook_command(), or runs the bundled console exe when frozen.
     """
     if platform == "win32":
         if frozen:
             exe = ntpath.join(ntpath.dirname(executable), STATUSLINE_EXE_NAME)
             return f'"{exe}"'
         return f'"{executable}" "{script_path}"'
-    return shlex.quote(str(script_path))
+    return "/bin/sh " + shlex.quote(str(script_path))
 
 
 STATUSLINE_COMMAND = build_statusline_command(
@@ -546,7 +727,7 @@ def install_notify_script() -> None:
 def install_statusline_bridge_script() -> None:
     """Write the standalone statusLine bridge to STATUSLINE_SCRIPT_PATH."""
     CLAWD_DIR.mkdir(parents=True, exist_ok=True)
-    STATUSLINE_SCRIPT_PATH.write_text(STATUSLINE_BRIDGE_SCRIPT, encoding="utf-8")
+    STATUSLINE_SCRIPT_PATH.write_text(build_statusline_script(sys.platform), encoding="utf-8")
     if sys.platform != "win32":
         STATUSLINE_SCRIPT_PATH.chmod(0o755)
     logger.info("Installed statusLine bridge: %s", STATUSLINE_SCRIPT_PATH)
@@ -556,17 +737,34 @@ def _statusline_state_path() -> Path:
     return CLAWD_DIR / STATUSLINE_STATE_NAME
 
 
+def _statusline_command_path() -> Path:
+    return CLAWD_DIR / STATUSLINE_COMMAND_NAME
+
+
+def _legacy_posix_statusline_command() -> str | None:
+    """The statusLine command POSIX installs wrote before the sh bridge: the
+    Python script run through its shebang. None on Windows, where that script is
+    still the current one."""
+    if sys.platform == "win32":
+        return None
+    return shlex.quote(str(STATUSLINE_SCRIPT_PATH.with_name(LEGACY_STATUSLINE_SCRIPT_NAME)))
+
+
 def _statusline_is_ours(value) -> bool:
     """True if a settings.statusLine value runs our bridge: the current command,
     or one left by another interpreter / install folder (same script, or the
-    bundled exe), so a reinstall replaces it instead of treating it as the
-    user's own. A wrapper that merely mentions the script is not ours."""
+    bundled exe) or by the python3 bridge POSIX ran before the sh one, so a
+    reinstall replaces it instead of treating it as the user's own. A wrapper
+    that merely mentions the script is not ours."""
     if not isinstance(value, dict):
         return False
     command = value.get("command")
     if not isinstance(command, str):
         return False
     if command == STATUSLINE_COMMAND or command.startswith(STATUSLINE_COMMAND + " "):
+        return True
+    legacy = _legacy_posix_statusline_command()
+    if legacy and (command == legacy or command.startswith(legacy + " ")):
         return True
     script = re.escape(str(STATUSLINE_SCRIPT_PATH))
     pattern = (
@@ -590,6 +788,39 @@ def _write_json_atomic(path: Path, data) -> None:
         raise
 
 
+def _saved_original_command() -> str | None:
+    """The command of the saved original statusLine; None when there is none (or
+    it has no command, like a static text line, so there is nothing to chain)."""
+    try:
+        state = json.loads(_statusline_state_path().read_text(encoding="utf-8-sig"))
+        command = state["statusLine"]["command"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return command if isinstance(command, str) and command.strip() else None
+
+
+def _sync_statusline_command_file() -> None:
+    """Keep the plain-text copy of the saved command in step with the JSON state:
+    the sh bridge runs exactly that text. Removed when there is no command."""
+    path = _statusline_command_path()
+    command = _saved_original_command()
+    if command is None:
+        path.unlink(missing_ok=True)
+        return
+    data = command.encode("utf-8")
+    if path.is_file() and path.read_bytes() == data:
+        return
+    _write_bytes_atomic(path, data)
+
+
+def _statusline_command_file_is_current() -> bool:
+    command = _saved_original_command()
+    path = _statusline_command_path()
+    if command is None:
+        return not path.exists()
+    return path.is_file() and path.read_bytes() == command.encode("utf-8")
+
+
 def _wire_statusline(settings: dict) -> None:
     """Point settings.statusLine at the bridge, saving the user's own first.
 
@@ -603,6 +834,7 @@ def _wire_statusline(settings: dict) -> None:
             state_path.unlink(missing_ok=True)
         else:
             _write_json_atomic(state_path, {"statusLine": current})
+    _sync_statusline_command_file()
     base = current if isinstance(current, dict) else {}
     settings["statusLine"] = {**base, "type": "command", "command": STATUSLINE_COMMAND}
 
@@ -626,6 +858,15 @@ def _unwire_statusline(settings: dict) -> bool:
     else:
         settings["statusLine"] = original
     return True
+
+
+def _remove_legacy_statusline_script() -> None:
+    """Delete the python3 bridge an older POSIX install left behind. Only called
+    once settings.json points at the sh bridge: before that, the file is what a
+    still-wired statusLine runs."""
+    if sys.platform == "win32":
+        return
+    STATUSLINE_SCRIPT_PATH.with_name(LEGACY_STATUSLINE_SCRIPT_NAME).unlink(missing_ok=True)
 
 
 def _matcher_of(entry: dict):
@@ -1005,7 +1246,8 @@ def are_hooks_installed() -> bool:
                     return False
     statusline = settings.get("statusLine")
     return (isinstance(statusline, dict)
-            and statusline.get("command") == STATUSLINE_COMMAND)
+            and statusline.get("command") == STATUSLINE_COMMAND
+            and _statusline_command_file_is_current())
 
 
 def install_hooks() -> bool:
@@ -1048,6 +1290,7 @@ def install_hooks() -> bool:
     _wire_statusline(settings)
 
     _write_settings_atomic(settings)
+    _remove_legacy_statusline_script()
     logger.info("Installed hooks in %s", CLAUDE_SETTINGS_PATH)
     return True
 
@@ -1108,5 +1351,6 @@ def uninstall_hooks() -> bool:
     _write_settings_atomic(settings)
     if is_unwired:
         _statusline_state_path().unlink(missing_ok=True)
+        _statusline_command_path().unlink(missing_ok=True)
     logger.info("Uninstalled hooks from %s", CLAUDE_SETTINGS_PATH)
     return True
