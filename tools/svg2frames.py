@@ -309,7 +309,9 @@ def render_frames(
         extract_svg_palette(svg_path.read_text(encoding="utf-8")) if snap == "exact" else None
     )
 
-    tmp_html = output_dir / "_svg2frames_tmp.html"
+    # Resolve to an absolute path: Path.as_uri() rejects a relative path, which
+    # breaks the file:// URL when output_dir was given relative (e.g. on Windows).
+    tmp_html = (output_dir / "_svg2frames_tmp.html").resolve()
     tmp_html.write_text(html_content, encoding="utf-8")
 
     frame_interval = 1.0 / fps
