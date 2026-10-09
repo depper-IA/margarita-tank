@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-15 -25 45 45" width="500" height="500">
+  <!-- Clawd v2 thinking: 4 s loop at 8 fps (32 frames). Slow sway, right pincer taps the chin, eyes look up at the bubble, dots load. -->
+  <defs>
+    <style>
+      .dot0 { animation: dot0 4s infinite step-end; }
+      .dot1 { animation: dot1 4s infinite step-end; }
+      .dot2 { animation: dot2 4s infinite step-end; }
+      .ar-r { animation: ar-r 4s infinite step-end; }
+      .ey-open { animation: ey-open 4s infinite step-end; }
+      .ey-shut { animation: ey-shut 4s infinite step-end; }
+      .ey-look { animation: ey-look 4s infinite step-end; }
+      .leg1 { animation: leg1 4s infinite step-end; }
+      .leg2 { animation: leg2 4s infinite step-end; }
+      .leg3 { animation: leg3 4s infinite step-end; }
+      .leg4 { animation: leg4 4s infinite step-end; }
+      .sway { animation: sway 4s infinite step-end; }
+      @keyframes dot0 {
+        0% { opacity: 0; }
+        10.9375% { opacity: 1; }
+        48.4375% { opacity: 0; }
+        60.9375% { opacity: 1; }
+      }
+      @keyframes dot1 {
+        0% { opacity: 0; }
+        20.3125% { opacity: 1; }
+        48.4375% { opacity: 0; }
+        70.3125% { opacity: 1; }
+      }
+      @keyframes dot2 {
+        0% { opacity: 0; }
+        29.6875% { opacity: 1; }
+        48.4375% { opacity: 0; }
+        79.6875% { opacity: 1; }
+      }
+      @keyframes ar-r {
+        0% { transform: translate(-8px, 2px); }
+        10.9375% { transform: translate(-8px, 1px); }
+        23.4375% { transform: translate(-8px, 2px); }
+        35.9375% { transform: translate(-8px, 1px); }
+        48.4375% { transform: translate(-8px, 2px); }
+        60.9375% { transform: translate(-8px, 1px); }
+        73.4375% { transform: translate(-8px, 2px); }
+        85.9375% { transform: translate(-8px, 1px); }
+      }
+      @keyframes ey-open {
+        0% { opacity: 1; }
+        45.3125% { opacity: 0; }
+        51.5625% { opacity: 1; }
+      }
+      @keyframes ey-shut {
+        0% { opacity: 0; }
+        45.3125% { opacity: 1; }
+        51.5625% { opacity: 0; }
+      }
+      @keyframes ey-look {
+        0% { transform: translate(2px, -1px); }
+      }
+      @keyframes leg1 {
+        0% { transform: translate(0px, 0px); }
+        17.1875% { transform: translate(-1px, 0px); }
+        35.9375% { transform: translate(0px, 0px); }
+        64.0625% { transform: translate(1px, 0px); }
+        82.8125% { transform: translate(0px, 0px); }
+      }
+      @keyframes leg2 {
+        0% { transform: translate(0px, 0px); }
+        17.1875% { transform: translate(-1px, 0px); }
+        35.9375% { transform: translate(0px, 0px); }
+        64.0625% { transform: translate(1px, 0px); }
+        82.8125% { transform: translate(0px, 0px); }
+      }
+      @keyframes leg3 {
+        0% { transform: translate(0px, 0px); }
+        17.1875% { transform: translate(-1px, 0px); }
+        35.9375% { transform: translate(0px, 0px); }
+        64.0625% { transform: translate(1px, 0px); }
+        82.8125% { transform: translate(0px, 0px); }
+      }
+      @keyframes leg4 {
+        0% { transform: translate(0px, 0px); }
+        17.1875% { transform: translate(-1px, 0px); }
+        35.9375% { transform: translate(0px, 0px); }
+        64.0625% { transform: translate(1px, 0px); }
+        82.8125% { transform: translate(0px, 0px); }
+      }
+      @keyframes sway {
+        0% { transform: translate(0px, 0px); }
+        7.8125% { transform: translate(-1px, 0px); }
+        17.1875% { transform: translate(-2px, 0px); }
+        35.9375% { transform: translate(-1px, 0px); }
+        45.3125% { transform: translate(0px, 0px); }
+        54.6875% { transform: translate(1px, 0px); }
+        64.0625% { transform: translate(2px, 0px); }
+        82.8125% { transform: translate(1px, 0px); }
+        92.1875% { transform: translate(0px, 0px); }
+      }
+    </style>
+    <!-- ===== rig: shared Clawd v2 parts, identical in every clawd-*-v2.svg (see clawd-static-base-v2.svg) ===== -->
+    <!-- ground shadow, two translucent rows -->
+    <g id="shadow">
+      <path fill="#000000" fill-opacity="0.3" d="M3 30h24v1h-24z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M6 31h18v1h-18z"/>
+    </g>
+    <!-- leg 1 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg1">
+      <path fill="#B8644B" d="M6 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M7 18h1v11h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg2">
+      <path fill="#B8644B" d="M10 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M11 18h1v11h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg3">
+      <path fill="#B8644B" d="M18 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M19 18h1v11h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg4">
+      <path fill="#B8644B" d="M22 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M23 18h1v11h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- body: 1 px outline, light top/left, shade bottom/right, specular dot -->
+    <g id="torso">
+      <path fill="#DE886D" d="M24 13h1v1h-1zM8 14h16v1h-16zM6 15h18v8h-18zM5 23h1v2h-1z"/>
+      <path fill="#B8644B" d="M24 14h1v9h-1zM6 23h19v2h-19z"/>
+      <path fill="#6B3122" d="M4 12h22v1h-22zM4 13h1v12h-1zM25 13h1v12h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
+      <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
+    </g>
+    <!-- left pincer fused with the body (rest position only) -->
+    <g id="arm-l">
+      <path fill="#DE886D" d="M4 18h1v1h-1zM2 19h3v2h-3zM4 21h1v1h-1z"/>
+      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM0 21h4v1h-4z"/>
+    </g>
+    <!-- right pincer with a closed outline (any position) -->
+    <g id="arm-r-free">
+      <path fill="#6B3122" d="M26 18h4v1h-4zM26 19h1v2h-1zM28 19h1v2h-1zM26 21h4v1h-4z"/>
+      <path fill="#DE886D" d="M27 19h1v2h-1z"/>
+    </g>
+    <!-- eyes 2x4 with a white highlight -->
+    <g id="eyes-open">
+      <path fill="#FFFFFF" d="M8 16h1v1h-1zM20 16h1v1h-1z"/>
+      <path fill="#1B1311" d="M9 16h1v1h-1zM21 16h1v1h-1zM8 17h2v3h-2zM20 17h2v3h-2z"/>
+    </g>
+    <!-- eyes shut, 2x1 line -->
+    <g id="eyes-shut">
+      <path fill="#1B1311" d="M8 19h2v1h-2zM20 19h2v1h-2z"/>
+    </g>
+    <!-- ===== props used by this animation ===== -->
+    <g id="think-bubble">
+      <path fill="#2A1E1A" d="M16 -14h18v1h-18zM15 -13h1v1h-1zM34 -13h1v1h-1zM14 -12h1v11h-1zM35 -12h1v11h-1zM15 -1h1v1h-1zM34 -1h1v1h-1zM16 0h18v1h-18zM18 3h2v1h-2zM17 4h1v2h-1zM20 4h1v2h-1zM18 6h2v1h-2zM14 9h2v2h-2z"/>
+      <path fill="#FFFFFF" d="M16 -13h18v1h-18zM15 -12h20v10h-20zM16 -1h18v1h-18zM18 4h2v2h-2z"/>
+      <path fill="#E6DDD8" d="M15 -2h20v1h-20z"/>
+    </g>
+    <g id="think-dot0">
+      <path fill="#2F7DE1" d="M19 -9h2v2h-2z"/>
+    </g>
+    <g id="think-dot1">
+      <path fill="#2F7DE1" d="M24 -9h2v2h-2z"/>
+    </g>
+    <g id="think-dot2">
+      <path fill="#2F7DE1" d="M29 -9h2v2h-2z"/>
+    </g>
+  </defs>
+  <g transform="scale(.5)">
+    <use href="#shadow"/>
+    <use href="#think-bubble"/>
+    <g class="dot0">
+    <use href="#think-dot0"/>
+    </g>
+    <g class="dot1">
+    <use href="#think-dot1"/>
+    </g>
+    <g class="dot2">
+    <use href="#think-dot2"/>
+    </g>
+    <g class="leg1">
+    <use href="#leg1"/>
+    </g>
+    <g class="leg2">
+    <use href="#leg2"/>
+    </g>
+    <g class="leg3">
+    <use href="#leg3"/>
+    </g>
+    <g class="leg4">
+    <use href="#leg4"/>
+    </g>
+    <g class="sway">
+    <use href="#torso"/>
+    <use href="#arm-l"/>
+    <g class="ar-r">
+    <use href="#arm-r-free"/>
+    </g>
+    <g class="ey-look">
+    <g class="ey-open">
+    <use href="#eyes-open"/>
+    </g>
+    <g class="ey-shut">
+    <use href="#eyes-shut"/>
+    </g>
+    </g>
+    </g>
+  </g>
+</svg>

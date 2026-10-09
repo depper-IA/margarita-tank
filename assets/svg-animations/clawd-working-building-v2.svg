@@ -1,0 +1,281 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-15 -25 45 45" width="500" height="500">
+  <!-- Clawd v2 building: 1 s loop at 8 fps (8 frames). Hard hat, hammer wind-up, strike on the anvil with sparks and a squash. -->
+  <defs>
+    <style>
+      .h-up { animation: h-up 1s infinite step-end; }
+      .hm-up { animation: hm-up 1s infinite step-end; }
+      .hv-up { animation: hv-up 1s infinite step-end; }
+      .hm-down { animation: hm-down 1s infinite step-end; }
+      .hv-down { animation: hv-down 1s infinite step-end; }
+      .hot { animation: hot 1s infinite step-end; }
+      .sm0 { animation: sm0 1s infinite step-end; }
+      .sv0 { animation: sv0 1s infinite step-end; }
+      .sm1 { animation: sm1 1s infinite step-end; }
+      .sv1 { animation: sv1 1s infinite step-end; }
+      .sm2 { animation: sm2 1s infinite step-end; }
+      .sv2 { animation: sv2 1s infinite step-end; }
+      .swm { animation: swm 1s infinite step-end; }
+      .swv { animation: swv 1s infinite step-end; }
+      .ar-r { animation: ar-r 1s infinite step-end; }
+      .ey-open { animation: ey-open 1s infinite step-end; }
+      .ey-wide { animation: ey-wide 1s infinite step-end; }
+      .ey-shut { animation: ey-shut 1s infinite step-end; }
+      .bounce { animation: bounce 1s infinite step-end; }
+      @keyframes h-up {
+        0% { opacity: 1; }
+        31.25% { opacity: 0; }
+        68.75% { opacity: 1; }
+      }
+      @keyframes hm-up {
+        0% { transform: translate(27px, 6px); }
+        6.25% { transform: translate(27px, 3px); }
+        18.75% { transform: translate(27px, -1px); }
+        31.25% { transform: translate(0px, 0px); }
+        68.75% { transform: translate(27px, 8px); }
+        81.25% { transform: translate(27px, 6px); }
+      }
+      @keyframes hv-up {
+        0% { opacity: 1; }
+        31.25% { opacity: 0; }
+        68.75% { opacity: 1; }
+      }
+      @keyframes hm-down {
+        0% { transform: translate(0px, 0px); }
+        31.25% { transform: translate(29px, 11px); }
+        43.75% { transform: translate(29px, 15px); }
+        56.25% { transform: translate(29px, 12px); }
+        68.75% { transform: translate(0px, 0px); }
+      }
+      @keyframes hv-down {
+        0% { opacity: 0; }
+        31.25% { opacity: 1; }
+        68.75% { opacity: 0; }
+      }
+      @keyframes hot {
+        0% { fill: #FF5252; }
+        43.75% { fill: #FFF59D; }
+        56.25% { fill: #FFC107; }
+        68.75% { fill: #FF5252; }
+      }
+      @keyframes sm0 {
+        0% { transform: translate(0px, 0px); }
+        43.75% { transform: translate(35px, 22px); }
+        56.25% { transform: translate(39px, 16px); }
+        68.75% { transform: translate(43px, 10px); }
+        81.25% { transform: translate(0px, 0px); }
+      }
+      @keyframes sv0 {
+        0% { opacity: 0; }
+        43.75% { opacity: 1; }
+        81.25% { opacity: 0; }
+      }
+      @keyframes sm1 {
+        0% { transform: translate(0px, 0px); }
+        43.75% { transform: translate(35px, 22px); }
+        56.25% { transform: translate(42px, 21px); }
+        68.75% { transform: translate(49px, 20px); }
+        81.25% { transform: translate(0px, 0px); }
+      }
+      @keyframes sv1 {
+        0% { opacity: 0; }
+        43.75% { opacity: 1; }
+        81.25% { opacity: 0; }
+      }
+      @keyframes sm2 {
+        0% { transform: translate(0px, 0px); }
+        43.75% { transform: translate(35px, 22px); }
+        56.25% { transform: translate(38px, 25px); }
+        68.75% { transform: translate(41px, 28px); }
+        81.25% { transform: translate(0px, 0px); }
+      }
+      @keyframes sv2 {
+        0% { opacity: 0; }
+        43.75% { opacity: 1; }
+        81.25% { opacity: 0; }
+      }
+      @keyframes swm {
+        0% { transform: translate(0px, 0px); }
+        6.25% { transform: translate(2px, 16px); }
+        18.75% { transform: translate(1px, 13px); }
+        31.25% { transform: translate(0px, 10px); }
+        43.75% { transform: translate(-2px, 7px); }
+        56.25% { transform: translate(-3px, 4px); }
+        68.75% { transform: translate(0px, 0px); }
+      }
+      @keyframes swv {
+        0% { opacity: 0; }
+        6.25% { opacity: 1; }
+        68.75% { opacity: 0; }
+      }
+      @keyframes ar-r {
+        0% { transform: translate(0px, 0px); }
+        6.25% { transform: translate(0px, -2px); }
+        18.75% { transform: translate(0px, -3px); }
+        31.25% { transform: translate(0px, 0px); }
+        43.75% { transform: translate(0px, -4px); }
+        56.25% { transform: translate(0px, -1px); }
+        68.75% { transform: translate(0px, 0px); }
+      }
+      @keyframes ey-open {
+        0% { opacity: 1; }
+        18.75% { opacity: 0; }
+        31.25% { opacity: 1; }
+        43.75% { opacity: 0; }
+        56.25% { opacity: 1; }
+      }
+      @keyframes ey-wide {
+        0% { opacity: 0; }
+        18.75% { opacity: 1; }
+        31.25% { opacity: 0; }
+      }
+      @keyframes ey-shut {
+        0% { opacity: 0; }
+        43.75% { opacity: 1; }
+        56.25% { opacity: 0; }
+      }
+      @keyframes bounce {
+        0% { transform: translate(0px, 0px); }
+        6.25% { transform: translate(0px, -1px); }
+        18.75% { transform: translate(0px, -4px); }
+        31.25% { transform: translate(0px, -2px); }
+        43.75% { transform: translate(0px, 4px); }
+        56.25% { transform: translate(0px, 2px); }
+        68.75% { transform: translate(0px, 0px); }
+      }
+    </style>
+    <!-- ===== rig: shared Clawd v2 parts, identical in every clawd-*-v2.svg (see clawd-static-base-v2.svg) ===== -->
+    <!-- ground shadow, two translucent rows -->
+    <g id="shadow">
+      <path fill="#000000" fill-opacity="0.3" d="M3 30h24v1h-24z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M6 31h18v1h-18z"/>
+    </g>
+    <!-- leg 1 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg1">
+      <path fill="#B8644B" d="M6 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M7 18h1v11h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg2">
+      <path fill="#B8644B" d="M10 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M11 18h1v11h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg3">
+      <path fill="#B8644B" d="M18 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M19 18h1v11h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg4">
+      <path fill="#B8644B" d="M22 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M23 18h1v11h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- body: 1 px outline, light top/left, shade bottom/right, specular dot -->
+    <g id="torso">
+      <path fill="#DE886D" d="M24 13h1v1h-1zM8 14h16v1h-16zM6 15h18v8h-18zM5 23h1v2h-1z"/>
+      <path fill="#B8644B" d="M24 14h1v9h-1zM6 23h19v2h-19z"/>
+      <path fill="#6B3122" d="M4 12h22v1h-22zM4 13h1v12h-1zM25 13h1v12h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
+      <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
+    </g>
+    <!-- left pincer fused with the body (rest position only) -->
+    <g id="arm-l">
+      <path fill="#DE886D" d="M4 18h1v1h-1zM2 19h3v2h-3zM4 21h1v1h-1z"/>
+      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM0 21h4v1h-4z"/>
+    </g>
+    <!-- right pincer fused with the body (rest position only) -->
+    <g id="arm-r">
+      <path fill="#6B3122" d="M26 18h4v1h-4zM28 19h1v2h-1zM26 21h4v1h-4z"/>
+      <path fill="#DE886D" d="M25 18h1v1h-1zM25 19h3v2h-3zM25 21h1v1h-1z"/>
+    </g>
+    <!-- eyes 2x4 with a white highlight -->
+    <g id="eyes-open">
+      <path fill="#FFFFFF" d="M8 16h1v1h-1zM20 16h1v1h-1z"/>
+      <path fill="#1B1311" d="M9 16h1v1h-1zM21 16h1v1h-1zM8 17h2v3h-2zM20 17h2v3h-2z"/>
+    </g>
+    <!-- eyes 2x5, wide open -->
+    <g id="eyes-wide">
+      <path fill="#FFFFFF" d="M8 15h1v1h-1zM20 15h1v1h-1z"/>
+      <path fill="#1B1311" d="M9 15h1v1h-1zM21 15h1v1h-1zM8 16h2v4h-2zM20 16h2v4h-2z"/>
+    </g>
+    <!-- eyes shut, 2x1 line -->
+    <g id="eyes-shut">
+      <path fill="#1B1311" d="M8 19h2v1h-2zM20 19h2v1h-2z"/>
+    </g>
+    <!-- ===== props used by this animation ===== -->
+    <g id="hardhat">
+      <path fill="#C98918" d="M14 6h2v4h-2zM19 7h1v3h-1zM7 11h16v1h-16z"/>
+      <path fill="#6E4A0C" d="M11 5h8v1h-8zM10 6h1v1h-1zM19 6h1v1h-1zM9 7h1v3h-1zM20 7h1v3h-1zM6 10h3v1h-3zM21 10h3v1h-3zM6 11h1v1h-1zM23 11h1v1h-1z"/>
+      <path fill="#F2B630" d="M16 6h3v4h-3zM11 7h3v2h-3zM10 9h4v1h-4zM9 10h12v1h-12z"/>
+      <path fill="#FFDB6E" d="M11 6h3v1h-3zM10 7h1v2h-1z"/>
+    </g>
+    <g id="anvil">
+      <path fill="#2F353C" d="M29 26h9v1h-9zM29 27h2v1h-2zM36 27h2v1h-2zM31 28h1v1h-1zM35 28h1v1h-1zM30 29h1v1h-1zM36 29h1v1h-1zM30 30h7v1h-7z"/>
+      <path fill="#DCE2E8" d="M31 27h5v1h-5z"/>
+      <path fill="#6B737D" d="M31 29h5v1h-5z"/>
+      <path fill="#A9B2BC" d="M32 28h3v1h-3z"/>
+    </g>
+    <g id="hammer-up">
+      <path fill="#93603E" d="M3 5h1v11h-1z"/>
+      <path fill="#5C3922" d="M4 5h1v11h-1z"/>
+      <path fill="#2F353C" d="M0 0h8v1h-8zM0 1h1v3h-1zM7 1h1v3h-1zM0 4h8v1h-8z"/>
+      <path fill="#6B737D" d="M1 3h6v1h-6z"/>
+      <path fill="#DCE2E8" d="M1 1h6v1h-6z"/>
+      <path fill="#A9B2BC" d="M1 2h6v1h-6z"/>
+    </g>
+    <g id="hammer-down">
+      <path fill="#93603E" d="M1 0h1v4h-1z"/>
+      <path fill="#5C3922" d="M2 0h1v4h-1z"/>
+      <path fill="#2F353C" d="M0 4h8v1h-8zM0 5h1v3h-1zM7 5h1v3h-1zM0 8h8v1h-8z"/>
+      <path fill="#6B737D" d="M1 7h6v1h-6z"/>
+      <path fill="#A9B2BC" d="M1 6h6v1h-6z"/>
+      <path fill="#DCE2E8" d="M1 5h6v1h-6z"/>
+    </g>
+    <g id="spark-b">
+      <path fill="#FFFFFF" d="M0 0h1v1h-1z"/>
+      <path fill="#FFD84D" d="M1 0h1v1h-1zM0 1h2v1h-2z"/>
+    </g>
+    <g id="spark-s">
+      <path fill="#FFD84D" d="M0 0h1v1h-1z"/>
+    </g>
+    <g id="sweat">
+      <path fill="#BDEFFF" d="M0 1h1v1h-1z"/>
+      <path fill="#40C4FF" d="M1 0h1v2h-1zM0 2h2v1h-2z"/>
+    </g>
+    <g id="wshadow">
+      <path fill="#000000" fill-opacity="0.3" d="M28 31h11v1h-11z"/>
+    </g>
+  </defs>
+  <g transform="scale(.5)">
+    <use href="#shadow"/>
+    <use href="#wshadow"/>
+    <use href="#anvil"/>
+    <path class="hot" d="M31 24h4v2h-4z"/>
+    <use href="#leg1"/>
+    <use href="#leg2"/>
+    <use href="#leg3"/>
+    <use href="#leg4"/>
+    <g class="bounce">
+    <use href="#torso"/>
+    <use href="#arm-l"/>
+    <g class="ar-r">
+    <use href="#arm-r"/>
+    </g>
+    <g class="ey-open">
+    <use href="#eyes-open"/>
+    </g>
+    <g class="ey-wide">
+    <use href="#eyes-wide"/>
+    </g>
+    <g class="ey-shut">
+    <use href="#eyes-shut"/>
+    </g>
+    <use href="#hardhat"/>
+    </g>
+    <g class="hv-up"><g class="hm-up"><use href="#hammer-up"/></g></g>
+    <g class="hv-down"><g class="hm-down"><use href="#hammer-down"/></g></g>
+    <g class="sv0"><g class="sm0"><use href="#spark-b"/></g></g>
+    <g class="sv1"><g class="sm1"><use href="#spark-b"/></g></g>
+    <g class="sv2"><g class="sm2"><use href="#spark-b"/></g></g>
+    <g class="swv"><g class="swm"><use href="#sweat"/></g></g>
+  </g>
+</svg>

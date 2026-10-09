@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 16" width="300" height="320">
+  <!--
+    CLAWD v2 ART BIBLE
+    Grid     : 1 art pixel = 0.5 SVG unit. The body box is 30 x 32 art px (= the old 15 x 16 units), so a
+               viewBox kept from the v1 files renders at the same size: at --scale 4 one art pixel is 2 device
+               pixels and every edge lands on a whole pixel. Art lives in a <g transform="scale(.5)"> and is
+               written in art-pixel integers; props and motion use whole art pixels only (no rotation, no
+               scaling, no fractional moves, so nothing is ever anti-aliased).
+    Palette  : outline #6B3122 | base #DE886D | light #F3AC90 | specular #FFD3C2 | shade #B8644B
+               eyes #1B1311 + white highlight #FFFFFF | blush #EA7C7E | ground shadow black at 30% and 15%.
+               Props: hat #F2B630 #FFDB6E #C98918 on #6E4A0C | wood #93603E #5C3922 | steel #A9B2BC #DCE2E8 #6B737D
+               on #2F353C | spark #FFD84D | speech bubble paper #FFFFFF on ink #2A1E1A, bang #E25A35.
+    Rules    : 1 px outline around every shape (computed as the inner outline of the silhouette). Light comes
+               from the top left: light band on the top and left, shade on the bottom and right, one 2x1
+               specular. Eyes are 2x4 with a white top-left highlight (wide 2x5, shut 2x1, happy arc, squint 2x2).
+               Pincers are 4x4 C shapes with the outer middle 2 px cut; legs are 2 px wide (shade column + outline
+               column, outline foot). Blush and a small smile mark friendly states.
+    Rig      : <defs> ids below are the reusable parts; animation files copy the ones they use. Animate them
+               by wrapping <use> in a <g class="..."> whose CSS translates whole art pixels (step-end keyframes,
+               one key per rendered frame); swap variants (eyes, pincers, shadow) with opacity keyframes.
+               Pincer rule: use arm-l / arm-r (fused with the body) only at the rest spot or sliding along
+               the body side; use arm-l-free / arm-r-free anywhere else.
+  -->
+  <defs>
+    <!-- ===== rig: shared Clawd v2 parts, identical in every clawd-*-v2.svg (see clawd-static-base-v2.svg) ===== -->
+    <!-- ground shadow, two translucent rows -->
+    <g id="shadow">
+      <path fill="#000000" fill-opacity="0.3" d="M3 30h24v1h-24z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M6 31h18v1h-18z"/>
+    </g>
+    <!-- leg 1 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg1">
+      <path fill="#B8644B" d="M6 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M7 18h1v11h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg2">
+      <path fill="#B8644B" d="M10 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M11 18h1v11h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg3">
+      <path fill="#B8644B" d="M18 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M19 18h1v11h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg4">
+      <path fill="#B8644B" d="M22 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M23 18h1v11h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- body: 1 px outline, light top/left, shade bottom/right, specular dot -->
+    <g id="torso">
+      <path fill="#DE886D" d="M24 13h1v1h-1zM8 14h16v1h-16zM6 15h18v8h-18zM5 23h1v2h-1z"/>
+      <path fill="#B8644B" d="M24 14h1v9h-1zM6 23h19v2h-19z"/>
+      <path fill="#6B3122" d="M4 12h22v1h-22zM4 13h1v12h-1zM25 13h1v12h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
+      <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
+    </g>
+    <!-- left pincer fused with the body (rest position only) -->
+    <g id="arm-l">
+      <path fill="#DE886D" d="M4 18h1v1h-1zM2 19h3v2h-3zM4 21h1v1h-1z"/>
+      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM0 21h4v1h-4z"/>
+    </g>
+    <!-- right pincer fused with the body (rest position only) -->
+    <g id="arm-r">
+      <path fill="#6B3122" d="M26 18h4v1h-4zM28 19h1v2h-1zM26 21h4v1h-4z"/>
+      <path fill="#DE886D" d="M25 18h1v1h-1zM25 19h3v2h-3zM25 21h1v1h-1z"/>
+    </g>
+    <!-- eyes 2x4 with a white highlight -->
+    <g id="eyes-open">
+      <path fill="#FFFFFF" d="M8 16h1v1h-1zM20 16h1v1h-1z"/>
+      <path fill="#1B1311" d="M9 16h1v1h-1zM21 16h1v1h-1zM8 17h2v3h-2zM20 17h2v3h-2z"/>
+    </g>
+  </defs>
+  <g transform="scale(.5)">
+    <use href="#shadow"/>
+    <use href="#leg1"/>
+    <use href="#leg2"/>
+    <use href="#leg3"/>
+    <use href="#leg4"/>
+    <use href="#torso"/>
+    <use href="#arm-l"/>
+    <use href="#arm-r"/>
+    <use href="#eyes-open"/>
+  </g>
+</svg>

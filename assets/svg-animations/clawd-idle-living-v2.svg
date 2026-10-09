@@ -1,0 +1,356 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-15 -25 45 45" width="500" height="500">
+  <!-- Clawd v2 idle: 16 s loop at 6 fps (96 frames). Same beats as clawd-idle-living.svg: look right, scratch, look left, big yawn with a tear. -->
+  <defs>
+    <style>
+      .sh-n { animation: sh-n 16s infinite step-end; }
+      .sh-s { animation: sh-s 16s infinite step-end; }
+      .idle-shadow { animation: idle-shadow 16s infinite step-end; }
+      .mo-mouth-yawn-1 { animation: mo-mouth-yawn-1 16s infinite step-end; }
+      .mo-mouth-yawn-2 { animation: mo-mouth-yawn-2 16s infinite step-end; }
+      .mo-mouth-yawn-3 { animation: mo-mouth-yawn-3 16s infinite step-end; }
+      .tear-m { animation: tear-m 16s infinite step-end; }
+      .tear-v { animation: tear-v 16s infinite step-end; }
+      .ar-l-a { animation: ar-l-a 16s infinite step-end; }
+      .ar-l-f { animation: ar-l-f 16s infinite step-end; }
+      .ar-l { animation: ar-l 16s infinite step-end; }
+      .ar-r-a { animation: ar-r-a 16s infinite step-end; }
+      .ar-r-f { animation: ar-r-f 16s infinite step-end; }
+      .ar-r { animation: ar-r 16s infinite step-end; }
+      .ey-open { animation: ey-open 16s infinite step-end; }
+      .ey-shut { animation: ey-shut 16s infinite step-end; }
+      .ey-look { animation: ey-look 16s infinite step-end; }
+      .idle-breathe { animation: idle-breathe 16s infinite step-end; }
+      .idle-body { animation: idle-body 16s infinite step-end; }
+      @keyframes sh-n {
+        0% { opacity: 1; }
+        61.9792% { opacity: 0; }
+        67.1875% { opacity: 1; }
+      }
+      @keyframes sh-s {
+        0% { opacity: 0; }
+        61.9792% { opacity: 1; }
+        67.1875% { opacity: 0; }
+      }
+      @keyframes idle-shadow {
+        0% { transform: translate(0px, 0px); }
+        9.8958% { transform: translate(1px, 0px); }
+        10.9375% { transform: translate(2px, 0px); }
+        23.4375% { transform: translate(1px, 0px); }
+        24.4792% { transform: translate(0px, 0px); }
+        27.6042% { transform: translate(1px, 0px); }
+        36.9792% { transform: translate(0px, 0px); }
+        39.0625% { transform: translate(-1px, 0px); }
+        40.1042% { transform: translate(-2px, 0px); }
+        51.5625% { transform: translate(-1px, 0px); }
+        53.6458% { transform: translate(0px, 0px); }
+      }
+      @keyframes mo-mouth-yawn-1 {
+        0% { opacity: 0; }
+        59.8958% { opacity: 1; }
+        61.9792% { opacity: 0; }
+        72.3958% { opacity: 1; }
+        74.4792% { opacity: 0; }
+      }
+      @keyframes mo-mouth-yawn-2 {
+        0% { opacity: 0; }
+        61.9792% { opacity: 1; }
+        64.0625% { opacity: 0; }
+        69.2708% { opacity: 1; }
+        72.3958% { opacity: 0; }
+      }
+      @keyframes mo-mouth-yawn-3 {
+        0% { opacity: 0; }
+        64.0625% { opacity: 1; }
+        69.2708% { opacity: 0; }
+      }
+      @keyframes tear-m {
+        0% { transform: translate(0px, 0px); }
+        66.1458% { transform: translate(0px, 1px); }
+        68.2292% { transform: translate(0px, 2px); }
+        70.3125% { transform: translate(0px, 3px); }
+        72.3958% { transform: translate(0px, 4px); }
+        74.4792% { transform: translate(0px, 0px); }
+      }
+      @keyframes tear-v {
+        0% { opacity: 0; }
+        65.1042% { opacity: 1; }
+        74.4792% { opacity: 0; }
+      }
+      @keyframes ar-l-a {
+        0% { opacity: 1; }
+        29.6875% { opacity: 0; }
+        38.0208% { opacity: 1; }
+        59.8958% { opacity: 0; }
+        70.3125% { opacity: 1; }
+      }
+      @keyframes ar-l-f {
+        0% { opacity: 0; }
+        29.6875% { opacity: 1; }
+        38.0208% { opacity: 0; }
+        59.8958% { opacity: 1; }
+        70.3125% { opacity: 0; }
+      }
+      @keyframes ar-l {
+        0% { transform: translate(0px, 0px); }
+        29.6875% { transform: translate(2px, -6px); }
+        30.7292% { transform: translate(3px, -8px); }
+        31.7708% { transform: translate(1px, -5px); }
+        32.8125% { transform: translate(3px, -8px); }
+        33.8542% { transform: translate(1px, -5px); }
+        34.8958% { transform: translate(3px, -8px); }
+        35.9375% { transform: translate(1px, -5px); }
+        36.9792% { transform: translate(1px, -2px); }
+        38.0208% { transform: translate(0px, 0px); }
+        59.8958% { transform: translate(-1px, -3px); }
+        60.9375% { transform: translate(-2px, -4px); }
+        63.0208% { transform: translate(-3px, -5px); }
+        64.0625% { transform: translate(-4px, -6px); }
+        66.1458% { transform: translate(-4px, -5px); }
+        67.1875% { transform: translate(-3px, -4px); }
+        68.2292% { transform: translate(-2px, -2px); }
+        69.2708% { transform: translate(-1px, 0px); }
+        70.3125% { transform: translate(0px, 2px); }
+        73.4375% { transform: translate(0px, 1px); }
+        74.4792% { transform: translate(0px, 0px); }
+      }
+      @keyframes ar-r-a {
+        0% { opacity: 1; }
+        59.8958% { opacity: 0; }
+        70.3125% { opacity: 1; }
+      }
+      @keyframes ar-r-f {
+        0% { opacity: 0; }
+        59.8958% { opacity: 1; }
+        70.3125% { opacity: 0; }
+      }
+      @keyframes ar-r {
+        0% { transform: translate(0px, 0px); }
+        59.8958% { transform: translate(1px, -3px); }
+        60.9375% { transform: translate(2px, -4px); }
+        63.0208% { transform: translate(3px, -5px); }
+        64.0625% { transform: translate(4px, -6px); }
+        66.1458% { transform: translate(4px, -5px); }
+        67.1875% { transform: translate(3px, -4px); }
+        68.2292% { transform: translate(2px, -2px); }
+        69.2708% { transform: translate(1px, 0px); }
+        70.3125% { transform: translate(0px, 2px); }
+        73.4375% { transform: translate(0px, 1px); }
+        74.4792% { transform: translate(0px, 0px); }
+      }
+      @keyframes ey-open {
+        0% { opacity: 1; }
+        4.6875% { opacity: 0; }
+        5.7292% { opacity: 1; }
+        19.2708% { opacity: 0; }
+        20.3125% { opacity: 1; }
+        44.2708% { opacity: 0; }
+        45.3125% { opacity: 1; }
+        61.9792% { opacity: 0; }
+        74.4792% { opacity: 1; }
+        84.8958% { opacity: 0; }
+        85.9375% { opacity: 1; }
+      }
+      @keyframes ey-shut {
+        0% { opacity: 0; }
+        4.6875% { opacity: 1; }
+        5.7292% { opacity: 0; }
+        19.2708% { opacity: 1; }
+        20.3125% { opacity: 0; }
+        44.2708% { opacity: 1; }
+        45.3125% { opacity: 0; }
+        61.9792% { opacity: 1; }
+        74.4792% { opacity: 0; }
+        84.8958% { opacity: 1; }
+        85.9375% { opacity: 0; }
+      }
+      @keyframes ey-look {
+        0% { transform: translate(0px, 0px); }
+        10.9375% { transform: translate(2px, 0px); }
+        23.4375% { transform: translate(1px, 0px); }
+        24.4792% { transform: translate(0px, 0px); }
+        39.0625% { transform: translate(-1px, 0px); }
+        40.1042% { transform: translate(-2px, 0px); }
+        50.5208% { transform: translate(-1px, 0px); }
+        51.5625% { transform: translate(0px, 0px); }
+        59.8958% { transform: translate(0px, -1px); }
+        75.5208% { transform: translate(0px, 0px); }
+      }
+      @keyframes idle-breathe {
+        0% { transform: translate(0px, 0px); }
+        4.6875% { transform: translate(0px, 1px); }
+        15.1042% { transform: translate(0px, 0px); }
+        25.5208% { transform: translate(0px, 1px); }
+        34.8958% { transform: translate(0px, 0px); }
+        45.3125% { transform: translate(0px, 1px); }
+        54.6875% { transform: translate(0px, 0px); }
+        65.1042% { transform: translate(0px, 1px); }
+        75.5208% { transform: translate(0px, 0px); }
+        84.8958% { transform: translate(0px, 1px); }
+        95.3125% { transform: translate(0px, 0px); }
+      }
+      @keyframes idle-body {
+        0% { transform: translate(0px, 0px); }
+        9.8958% { transform: translate(1px, 0px); }
+        10.9375% { transform: translate(2px, 0px); }
+        23.4375% { transform: translate(1px, 0px); }
+        24.4792% { transform: translate(0px, 0px); }
+        27.6042% { transform: translate(1px, 0px); }
+        36.9792% { transform: translate(0px, 0px); }
+        39.0625% { transform: translate(-1px, 0px); }
+        40.1042% { transform: translate(-2px, 0px); }
+        51.5625% { transform: translate(-1px, 0px); }
+        53.6458% { transform: translate(0px, 0px); }
+        56.7708% { transform: translate(0px, -1px); }
+        57.8125% { transform: translate(0px, -2px); }
+        61.9792% { transform: translate(0px, -3px); }
+        63.0208% { transform: translate(0px, -4px); }
+        66.1458% { transform: translate(0px, -3px); }
+        67.1875% { transform: translate(0px, -2px); }
+        68.2292% { transform: translate(0px, -1px); }
+        69.2708% { transform: translate(0px, 1px); }
+        70.3125% { transform: translate(0px, 2px); }
+        73.4375% { transform: translate(0px, 1px); }
+        74.4792% { transform: translate(0px, 0px); }
+      }
+    </style>
+    <!-- ===== rig: shared Clawd v2 parts, identical in every clawd-*-v2.svg (see clawd-static-base-v2.svg) ===== -->
+    <!-- ground shadow, two translucent rows -->
+    <g id="shadow">
+      <path fill="#000000" fill-opacity="0.3" d="M3 30h24v1h-24z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M6 31h18v1h-18z"/>
+    </g>
+    <!-- ground shadow, small (body in the air) -->
+    <g id="shadow-sm">
+      <path fill="#000000" fill-opacity="0.3" d="M6 30h18v1h-18z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M9 31h12v1h-12z"/>
+    </g>
+    <!-- leg 1 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg1">
+      <path fill="#B8644B" d="M6 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M7 18h1v11h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg2">
+      <path fill="#B8644B" d="M10 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M11 18h1v11h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg3">
+      <path fill="#B8644B" d="M18 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M19 18h1v11h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg4">
+      <path fill="#B8644B" d="M22 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M23 18h1v11h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- body: 1 px outline, light top/left, shade bottom/right, specular dot -->
+    <g id="torso">
+      <path fill="#DE886D" d="M24 13h1v1h-1zM8 14h16v1h-16zM6 15h18v8h-18zM5 23h1v2h-1z"/>
+      <path fill="#B8644B" d="M24 14h1v9h-1zM6 23h19v2h-19z"/>
+      <path fill="#6B3122" d="M4 12h22v1h-22zM4 13h1v12h-1zM25 13h1v12h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
+      <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
+    </g>
+    <!-- left pincer fused with the body (rest position only) -->
+    <g id="arm-l">
+      <path fill="#DE886D" d="M4 18h1v1h-1zM2 19h3v2h-3zM4 21h1v1h-1z"/>
+      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM0 21h4v1h-4z"/>
+    </g>
+    <!-- right pincer fused with the body (rest position only) -->
+    <g id="arm-r">
+      <path fill="#6B3122" d="M26 18h4v1h-4zM28 19h1v2h-1zM26 21h4v1h-4z"/>
+      <path fill="#DE886D" d="M25 18h1v1h-1zM25 19h3v2h-3zM25 21h1v1h-1z"/>
+    </g>
+    <!-- left pincer with a closed outline (any position) -->
+    <g id="arm-l-free">
+      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM3 19h1v2h-1zM0 21h4v1h-4z"/>
+      <path fill="#DE886D" d="M2 19h1v2h-1z"/>
+    </g>
+    <!-- right pincer with a closed outline (any position) -->
+    <g id="arm-r-free">
+      <path fill="#6B3122" d="M26 18h4v1h-4zM26 19h1v2h-1zM28 19h1v2h-1zM26 21h4v1h-4z"/>
+      <path fill="#DE886D" d="M27 19h1v2h-1z"/>
+    </g>
+    <!-- eyes 2x4 with a white highlight -->
+    <g id="eyes-open">
+      <path fill="#FFFFFF" d="M8 16h1v1h-1zM20 16h1v1h-1z"/>
+      <path fill="#1B1311" d="M9 16h1v1h-1zM21 16h1v1h-1zM8 17h2v3h-2zM20 17h2v3h-2z"/>
+    </g>
+    <!-- eyes shut, 2x1 line -->
+    <g id="eyes-shut">
+      <path fill="#1B1311" d="M8 19h2v1h-2zM20 19h2v1h-2z"/>
+    </g>
+    <!-- yawn mouth, size 1 -->
+    <g id="mouth-yawn-1">
+      <path fill="#1B1311" d="M14 21h2v1h-2z"/>
+    </g>
+    <!-- yawn mouth, size 2 -->
+    <g id="mouth-yawn-2">
+      <path fill="#1B1311" d="M14 20h2v1h-2zM13 21h4v1h-4zM14 22h2v1h-2z"/>
+    </g>
+    <!-- yawn mouth, size 3 -->
+    <g id="mouth-yawn-3">
+      <path fill="#1B1311" d="M13 19h4v1h-4zM12 20h6v2h-6zM12 22h2v1h-2zM16 22h2v1h-2zM13 23h1v1h-1zM16 23h1v1h-1z"/>
+      <path fill="#EA7C7E" d="M14 22h2v2h-2z"/>
+    </g>
+  </defs>
+  <g transform="scale(.5)">
+    <g class="idle-shadow">
+    <g class="sh-n">
+    <use href="#shadow"/>
+    </g>
+    <g class="sh-s">
+    <use href="#shadow-sm"/>
+    </g>
+    </g>
+    <use href="#leg1"/>
+    <use href="#leg2"/>
+    <use href="#leg3"/>
+    <use href="#leg4"/>
+    <g class="idle-body">
+    <g class="idle-breathe">
+    <use href="#torso"/>
+    <g class="ar-l">
+    <g class="ar-l-a">
+    <use href="#arm-l"/>
+    </g>
+    <g class="ar-l-f">
+    <use href="#arm-l-free"/>
+    </g>
+    </g>
+    <g class="ar-r">
+    <g class="ar-r-a">
+    <use href="#arm-r"/>
+    </g>
+    <g class="ar-r-f">
+    <use href="#arm-r-free"/>
+    </g>
+    </g>
+    <g class="ey-look">
+    <g class="ey-open">
+    <use href="#eyes-open"/>
+    </g>
+    <g class="ey-shut">
+    <use href="#eyes-shut"/>
+    </g>
+    </g>
+    <g class="mo-mouth-yawn-1">
+    <use href="#mouth-yawn-1"/>
+    </g>
+    <g class="mo-mouth-yawn-2">
+    <use href="#mouth-yawn-2"/>
+    </g>
+    <g class="mo-mouth-yawn-3">
+    <use href="#mouth-yawn-3"/>
+    </g>
+    <g class="tear-v">
+    <g class="tear-m">
+    <path fill="#40C4FF" d="M7 20h1v2h-1z"/>
+    <path fill="#BDEBFF" d="M7 20h1v1h-1z"/>
+    </g>
+    </g>
+    </g>
+    </g>
+  </g>
+</svg>
