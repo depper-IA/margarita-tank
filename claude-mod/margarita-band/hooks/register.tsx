@@ -1,9 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AnimName, Session, Usage } from '../types'
-import { ANIMS, drawAnim } from './anims'
-import { toRows } from './anims/kit'
+import type { AnimName, Session, Style, Usage } from '../types'
+import { ANIMS } from './anims'
 import {
   ASK_USER_QUESTION,
   LOW_BATTERY_USAGE_PCT,
@@ -14,6 +13,17 @@ import {
   onStop,
   selectAnim,
 } from './select'
+import {
+  crabRowCount,
+  crabRows,
+  DEFAULT_STYLE,
+  paneColumns,
+  parseCommand,
+  TICK_MS,
+  V1_TICK_MS,
+  v2For,
+  v2Index,
+} from './playback'
 
 const session = atom({ plugin: 'margarita-band', key: 'session' } as const, NEW_SESSION)
 const frame = atom({ plugin: 'margarita-band', key: 'frame' } as const, 0)
@@ -21,9 +31,9 @@ const usage = atom(
   { plugin: 'margarita-band', key: 'usage' } as const,
   { session: null, weekly: null } as Usage,
 )
+const style = atom({ plugin: 'margarita-band', key: 'style' } as const, DEFAULT_STYLE as Style)
 
 const PANE = 'margarita'
-const TICK_MS = 450
 const BATTERY_COLOR = '#FF4444'
 
 const LABELS: Record<AnimName, string> = {
@@ -52,6 +62,21 @@ const LABELS: Record<AnimName, string> = {
 let startedAt = 0
 let toolCalls = 0
 let isTicking = false
+// What the last tick drew, to redraw only when a v2 frame (or the animation) changes.
+let lastAnim: AnimName | '' = ''
+let lastIndex = -1
+let lastLegacyTick = 0
+// When the shown animation began: v2 frames are picked from the time elapsed since then.
+let shownAnim: AnimName | '' = ''
+let shownSince = 0
+
+const elapsedFor = (anim: AnimName, now: number): number => {
+  if (anim !== shownAnim) {
+    shownAnim = anim
+    shownSince = now
+  }
+  return now - shownSince
+}
 
 const percent = (v: unknown): number | null => {
   const n = Number(v)
@@ -104,16 +129,35 @@ export const register: Register = on => {
     await $.command.register({
       name: 'margarita',
       description: 'Muestra a Clawd en un panel lateral',
-      argumentHint: '[animación|auto]',
+      argumentHint: '[animación|auto|style v1|v2]',
     })
-    void $.ui.open({ id: PANE, title: 'Margarita', columns: 20 })
+    void $.ui.open({ id: PANE, title: 'Margarita', columns: paneColumns(await read($, style)) })
     await touch($, s => ({ ...s, phase: 'idle' as const, tool: '', subagents: [] }))
 
     if (!isTicking) {
       isTicking = true
+      // Ticks every TICK_MS, but the v1 poses and the oneshot countdown still step every 450 ms
+      // and a v2 animation only redraws when its frame changes.
       $.clock.every(TICK_MS, async () => {
-        await update($, frame, n => n + 1)
-        await update($, session, s => (s.oneshotLeft > 0 ? { ...s, oneshotLeft: s.oneshotLeft - 1 } : s))
+        const now = await $.clock.now()
+        const legacy = lastLegacyTick === 0 || now - lastLegacyTick >= V1_TICK_MS
+        if (legacy) {
+          lastLegacyTick = now
+          await update($, session, s => (s.oneshotLeft > 0 ? { ...s, oneshotLeft: s.oneshotLeft - 1 } : s))
+        }
+        const s = await read($, session)
+        const anim = selectAnim(s, worstUsage(await read($, usage)), now)
+        const art = v2For(anim, await read($, style))
+        let redraw = legacy
+        if (art) {
+          const index = v2Index(art, anim, elapsedFor(anim, now), !!s.preview)
+          redraw = anim !== lastAnim || index !== lastIndex
+          lastIndex = index
+        } else {
+          lastIndex = -1
+        }
+        lastAnim = anim
+        if (redraw) await update($, frame, n => n + 1)
       })
     }
 
@@ -127,14 +171,22 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'margarita' }, async ($, e) => {
-    await $.ui.open({ id: PANE, title: 'Margarita', columns: 20 })
-    const arg = String(e.args ?? '').trim()
     const names = Object.keys(ANIMS)
-    if (arg && names.includes(arg)) {
-      await update($, session, s => ({ ...s, preview: arg as AnimName }))
-      return { text: `Margarita: viendo "${arg}". /margarita auto para volver.` }
+    const cmd = parseCommand(String(e.args ?? ''), names)
+    if (cmd.kind === 'style') {
+      await update($, style, () => cmd.style)
+      await $.ui.open({ id: PANE, title: 'Margarita', columns: paneColumns(cmd.style) })
+      return { text: `Margarita: estilo ${cmd.style}.` }
     }
-    if (arg === 'auto') {
+    await $.ui.open({ id: PANE, title: 'Margarita', columns: paneColumns(await read($, style)) })
+    if (cmd.kind === 'style-help') {
+      return { text: `Margarita: estilo actual ${await read($, style)}. Usa /margarita style v1|v2.` }
+    }
+    if (cmd.kind === 'preview') {
+      await update($, session, s => ({ ...s, preview: cmd.anim }))
+      return { text: `Margarita: viendo "${cmd.anim}". /margarita auto para volver.` }
+    }
+    if (cmd.kind === 'auto') {
       await update($, session, s => ({ ...s, preview: '' as const }))
       return { text: 'Margarita: modo automático.' }
     }
@@ -229,9 +281,9 @@ export const register: Register = on => {
     const worst = worstUsage(u)
     const anim = selectAnim(s, worst, now)
     const total = ONESHOT_TICKS[anim]
-    // A oneshot plays from its first frame; a previewed oneshot loops.
+    // v1: a oneshot plays from its first frame; a previewed oneshot loops.
     const step = total === undefined ? f : s.preview ? f % total : total - s.oneshotLeft
-    const rows = toRows(drawAnim(anim, step))
+    const { rows } = crabRows(anim, await read($, style), step, elapsedFor(anim, now), !!s.preview)
 
     const elapsed = startedAt > 0 ? Math.round((now - startedAt) / 1000) : 0
     const isBusy = s.phase === 'working' || s.phase === 'thinking'
@@ -243,7 +295,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" alignItems="center" justifyContent="center" height={height}>
-        <Box flexDirection="column">
+        <Box flexDirection="column" justifyContent="flex-end" height={crabRowCount(await read($, style))}>
           {rows.map((runs, i) => (
             <Box key={`r${i}`} flexDirection="row">
               {runs.map((r, j) => (
