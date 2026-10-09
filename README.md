@@ -41,9 +41,10 @@ Ambos instaladores incluyen la app de la barra de menú / bandeja con el simulad
 
 <br>
 
-- **macOS**: abre el DMG y arrastra **Margarita Tank** a Aplicaciones. La app no está firmada, así que la primera vez hay que hacer clic derecho → **Abrir**, o ejecutar `xattr -dr com.apple.quarantine "/Applications/Margarita Tank.app"`.
+- **macOS**: abre el DMG y arrastra **Margarita Tank** a Aplicaciones. La app está firmada ad-hoc pero no notarizada por Apple, así que la primera vez hay que hacer clic derecho → **Abrir** (o *Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente*). Si macOS dice que la app "está dañada", ejecuta `xattr -dr com.apple.quarantine "/Applications/Margarita Tank.app"`.
 - **Windows**: instalación por usuario, sin permisos de administrador. El instalador no está firmado, así que SmartScreen puede mostrar un aviso: haz clic en **Más información** → **Ejecutar de todas formas**. Al desinstalar se quitan de `~/.claude/settings.json` solo los hooks de Margarita Tank; tus propios hooks quedan intactos.
-- **Hardware**: el firmware del ESP32 no va en los instaladores; se flashea aparte (ver [Firmware](#firmware-esp-idf-53x)). Sin hardware, usa el simulador incluido desde el menú de la app.
+- **Hardware**: el firmware del ESP32 no va en los instaladores; se flashea aparte (ver [Firmware](#firmware-esp-idf-53x)). Flashéalo de nuevo para ver las animaciones nuevas; con un firmware anterior la app sigue funcionando con las que ese firmware conoce. Sin hardware, usa el simulador incluido desde el menú de la app.
+- **Bluetooth en PC de escritorio**: si la conexión se corta o falla con `Unreachable`, revisa que la placa tenga puestas las antenas Wi-Fi/Bluetooth. Sin ellas la señal llega muy débil (cerca de -95 dBm) aunque el ESP32 esté al lado.
 
 </details>
 
@@ -60,13 +61,56 @@ Un Clawd por sesión, cada uno con su animación, y el consumo de tokens siempre
 <td width="50%" valign="top">
 <img src="assets/readme/preview-notificacion.png" alt="Tarjeta de notificación en español junto a Clawd"><br>
 <b>Notificaciones</b><br>
-Cuando Claude espera tu respuesta, aparece una tarjeta y el LED RGB parpadea.<br>
+Cuando algo necesita tu atención (un error de la API o una sesión inactiva), aparece una tarjeta y el LED RGB parpadea.<br>
 <code>hasta 8 tarjetas · rotación automática</code>
 </td>
 </tr>
 </table>
 
 <sub>Capturas del simulador escaladas 3x. Los valores de uso son de demostración.</sub>
+
+### Animaciones nuevas
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="assets/readme/anim-wake.png" alt="Clawd despertándose"><br>
+<b>Despertar</b> · <code>wake</code><br>
+Clawd se despierta cuando arranca una sesión mientras la pantalla dormía.
+</td>
+<td width="50%" valign="top">
+<img src="assets/readme/anim-happy.png" alt="Clawd saltando de alegría"><br>
+<b>¡Listo!</b> · <code>happy</code><br>
+Un salto de alegría cuando Claude termina su turno o cuando un subagente termina su trabajo.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="assets/readme/anim-low-battery.png" alt="Clawd adormilado con una batería baja"><br>
+<b>Pila baja</b> · <code>low_battery</code><br>
+Reemplaza al reposo cuando tu uso de Claude (5 h o semanal) llega al 90 %.
+</td>
+<td width="50%" valign="top">
+<img src="assets/readme/anim-hat-mishap.png" alt="Clawd con el sombrero de mago caído"><br>
+<b>Sombrero caído</b> · <code>hat_mishap</code><br>
+Cuando falla una búsqueda o descarga web (WebSearch / WebFetch).
+</td>
+</tr>
+</table>
+
+Mientras haces otra cosa, Clawd muestra lo que hace la sesión principal (pensar, escribir, construir…), y el contador del mini-cangrejo (<code>x1</code>, <code>x2</code>…) indica cuántos subagentes trabajan en segundo plano.
+
+### Íconos
+
+<p>
+<img src="assets/readme/icon-app.png" width="96" alt="Ícono de la app: Clawd sobre un cuadrado oscuro">
+&nbsp;&nbsp;
+<img src="assets/readme/icon-tray-disconnected.png" width="48" alt="Bandeja: desconectado (gris)">
+<img src="assets/readme/icon-tray-connected.png" width="48" alt="Bandeja: conectado (naranja)">
+<img src="assets/readme/icon-tray-notifications.png" width="48" alt="Bandeja: con notificaciones (punto rojo)">
+</p>
+
+Ícono de la app e instalador, y los tres estados de la bandeja de Windows: <b>gris</b> desconectado, <b>naranja</b> conectado y <b>punto rojo</b> con notificaciones. En macOS la barra de menú mantiene íconos monocromos que se adaptan al tema.
 
 ## `$ cat fork-changes.md`
 
@@ -107,6 +151,30 @@ Aísla los widgets de la barra del contenedor animado para frenar una tormenta d
 <b>Limpieza de sesiones</b><br>
 Timeout adaptativo: las sesiones sin PID (p. ej., en Windows) se purgan más rápido para que no queden sesiones fantasma.<br>
 <code>Python · asyncio · daemon</code>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>Animaciones nuevas</b><br>
+<code>wake</code>, <code>low_battery</code> y <code>hat_mishap</code> convertidas de los diseños SVG, y <code>happy</code> al terminar cada turno en lugar de la tarjeta "Esperando tu respuesta".<br>
+<code>C · LVGL · sprites RLE · daemon</code>
+</td>
+<td width="50%" valign="top">
+<b>Detección de firmware</b><br>
+El firmware anuncia el protocolo v3; con un firmware anterior, el daemon traduce las animaciones nuevas a las que ya conoce, así que actualizar la app antes que el ESP32 no rompe nada.<br>
+<code>NimBLE · GATT · daemon</code>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>Conexión BLE robusta en Windows</b><br>
+Un solo bucle de conexión por transporte, sin caché GATT de Windows, y límites de tiempo en el escaneo y la conexión para que el daemon no se cuelgue esperando a la pila Bluetooth.<br>
+<code>Python · bleak · WinRT</code>
+</td>
+<td width="50%" valign="top">
+<b>Íconos de Clawd</b><br>
+El cangrejo como ícono de la app y del instalador, y en la bandeja de Windows con un color por estado.<br>
+<code>tools/gen_app_icons.py</code>
 </td>
 </tr>
 </table>
