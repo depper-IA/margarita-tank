@@ -26,6 +26,14 @@ NOTIFY_SCRIPT_PATH = CLAWD_DIR / (
 )
 CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
 
+# The statusLine bridge keeps the same file name on every platform: it is always
+# run through an explicit interpreter on Windows and via its shebang on POSIX.
+STATUSLINE_SCRIPT_PATH = CLAWD_DIR / "statusline_bridge.py"
+# The user's pre-existing statusLine, saved so the bridge can chain it and
+# uninstall can restore it exactly.
+STATUSLINE_STATE_NAME = "statusline-original.json"
+STATUSLINE_EXE_NAME = "margarita-statusline.exe"
+
 # Standalone hook script — uses only Python stdlib, no external imports.
 NOTIFY_SCRIPT = textwrap.dedent('''\
     #!/usr/bin/env python3
@@ -319,6 +327,97 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
 
 # File name of the console-subsystem notify exe that the Windows PyInstaller
 # build ships next to the tray exe (see host/windows/margarita_tank.spec).
+STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
+    #!/usr/bin/env python3
+    """statusline_bridge - Claude Code statusLine wrapper for Clawd Tank.
+
+    Claude Code pipes a JSON document (including rate_limits) to the statusLine
+    command on every refresh. This script caches that JSON for the daemon's usage
+    bar, then chains the user's original statusLine command (saved at install time)
+    with the same stdin and prints its output, so their status line keeps working.
+    It must never fail loudly: every error is swallowed and the exit code is 0.
+    No external dependencies.
+    """
+    # STATUSLINE_BRIDGE_VERSION: 1
+
+    import json
+    import os
+    import subprocess
+    import sys
+    import tempfile
+    from pathlib import Path
+
+    CLAWD_DIR = Path(os.environ.get("CLAWD_TANK_DIR") or (Path.home() / ".clawd-tank"))
+    CACHE_PATH = CLAWD_DIR / "statusline-cache.json"
+    STATE_PATH = CLAWD_DIR / "statusline-original.json"
+    GUARD_ENV = "CLAWD_TANK_STATUSLINE_BRIDGE"
+    CHAIN_TIMEOUT_S = 10
+
+
+    def write_cache(raw):
+        try:
+            if not isinstance(json.loads(raw.decode("utf-8-sig")), dict):
+                return
+            CLAWD_DIR.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=str(CLAWD_DIR), suffix=".tmp")
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(raw)
+                os.replace(tmp, CACHE_PATH)
+            except BaseException:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
+        except Exception:
+            pass
+
+
+    def original_command():
+        try:
+            state = json.loads(STATE_PATH.read_text(encoding="utf-8-sig"))
+            command = state["statusLine"]["command"]
+            return command if isinstance(command, str) and command.strip() else None
+        except Exception:
+            return None
+
+
+    def chain(command, raw):
+        # A bridge that finds itself as the "original" would fork forever.
+        if os.environ.get(GUARD_ENV):
+            return
+        try:
+            proc = subprocess.run(
+                command, shell=True, input=raw, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, timeout=CHAIN_TIMEOUT_S,
+                env={**os.environ, GUARD_ENV: "1"},
+            )
+            sys.stdout.buffer.write(proc.stdout)
+            sys.stdout.buffer.flush()
+        except Exception:
+            pass
+
+
+    def main():
+        try:
+            raw = sys.stdin.buffer.read()
+        except Exception:
+            raw = b""
+        write_cache(raw)
+        command = original_command()
+        if command:
+            chain(command, raw)
+
+
+    if __name__ == "__main__":
+        try:
+            main()
+        except Exception:
+            pass
+        sys.exit(0)
+''')
+
 NOTIFY_EXE_NAME = "margarita-notify.exe"
 
 
