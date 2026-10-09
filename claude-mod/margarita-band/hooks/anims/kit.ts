@@ -102,9 +102,10 @@ export type Run = { ch: string; fg?: string; bg?: string; n: number }
 // Two pixel rows per text row with half blocks.
 export function toRows(g: Grid): Run[][] {
   const rows: Run[][] = []
-  for (let y = 0; y < H; y += 2) {
+  const width = g[0]?.length ?? 0
+  for (let y = 0; y + 1 < g.length; y += 2) {
     const runs: Run[] = []
-    for (let x = 0; x < W; x += 1) {
+    for (let x = 0; x < width; x += 1) {
       const top = g[y]![x] ?? null
       const bottom = g[y + 1]![x] ?? null
       let cell: Omit<Run, 'n'>

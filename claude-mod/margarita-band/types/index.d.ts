@@ -17,10 +17,13 @@ export type Session = {
   preview: AnimName | '' // forced by `/margarita <anim>` to look at any animation
 }
 
+// Art set the pane draws: the original 15x16 pose functions or the redesigned v2 frames.
+export type Style = 'v1' | 'v2'
+
 export type Usage = { session: number | null; weekly: number | null }
 
 declare module 'claude-code' {
   interface PluginState {
-    'margarita-band': { session: Session; frame: number; usage: Usage }
+    'margarita-band': { session: Session; frame: number; usage: Usage; style: Style }
   }
 }
