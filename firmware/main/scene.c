@@ -333,7 +333,7 @@ static const anim_def_t anim_defs[] = {
         .looping = false,  /* oneshot — returns to the slot's fallback */
         .width = WAKE_WIDTH,
         .height = WAKE_HEIGHT,
-        .y_offset = -8,   /* 8 - 16 */
+        .y_offset = 4,    /* v2 regen: -8 + 12 (crop delta) */
     },
     [CLAWD_ANIM_LOW_BATTERY] = {
         .rle_data = low_battery_rle_data,
