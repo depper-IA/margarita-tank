@@ -730,3 +730,94 @@ async def test_install_signal_handlers_works_on_the_running_loop():
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
+
+
+# --- Sender task uniqueness ---
+
+async def _run_daemon_with_add_transport_during_startup(monkeypatch, client):
+    """Run a menu-bar-mode daemon whose add_transport() lands while run() is
+    still awaiting the socket server start — the controller schedules it from
+    another thread right after launching run(). Returns (daemon, run_task,
+    sender_starts)."""
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    monkeypatch.setattr(daemon_mod, "_acquire_lock", lambda takeover=False: None)
+    daemon = ClawdDaemon(headless=False)
+    monkeypatch.setattr(daemon, "_write_pid", lambda: None)
+
+    async def idle():
+        await asyncio.Event().wait()
+
+    for checker in ("_staleness_checker", "_liveness_checker",
+                    "_ble_liveness_checker", "_usage_checker"):
+        monkeypatch.setattr(daemon, checker, idle)
+
+    sender_starts = []
+
+    async def fake_sender(name):
+        sender_starts.append(name)
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(daemon, "_transport_sender", fake_sender)
+
+    async def socket_start():
+        await daemon.add_transport("ble", client)
+
+    daemon._socket.start = socket_start
+
+    run_task = asyncio.create_task(daemon.run())
+    for _ in range(5):
+        await asyncio.sleep(0)
+    return daemon, run_task, sender_starts
+
+
+async def _stop_daemon_tasks(daemon, run_task):
+    tasks = [run_task, *daemon._sender_tasks.values()]
+    for attr in ("_staleness_task", "_liveness_task",
+                 "_ble_liveness_task", "_usage_task"):
+        if hasattr(daemon, attr):
+            tasks.append(getattr(daemon, attr))
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_run_does_not_start_second_sender_for_transport_added_during_startup(
+    monkeypatch,
+):
+    """Two senders for one BLE transport means two concurrent scan/connect
+    loops against a device that accepts a single connection."""
+    client = AsyncMock()
+    daemon, run_task, sender_starts = (
+        await _run_daemon_with_add_transport_during_startup(monkeypatch, client)
+    )
+    try:
+        assert sender_starts == ["ble"]
+        assert not daemon._sender_tasks["ble"].done()
+    finally:
+        await _stop_daemon_tasks(daemon, run_task)
+
+
+@pytest.mark.asyncio
+async def test_add_transport_replaces_live_sender_for_same_name(monkeypatch):
+    """Re-adding a transport name must stop the previous sender instead of
+    orphaning it next to the new one."""
+    daemon = ClawdDaemon(headless=False)
+
+    async def fake_sender(name):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(daemon, "_transport_sender", fake_sender)
+
+    await daemon.add_transport("ble", AsyncMock())
+    first = daemon._sender_tasks["ble"]
+    await daemon.add_transport("ble", AsyncMock())
+    second = daemon._sender_tasks["ble"]
+    try:
+        assert second is not first
+        assert first.cancelled()
+        assert not second.done()
+    finally:
+        second.cancel()
+        await asyncio.gather(second, return_exceptions=True)

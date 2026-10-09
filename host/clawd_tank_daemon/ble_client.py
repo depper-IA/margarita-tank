@@ -33,6 +33,10 @@ class ClawdBleClient:
     def __init__(self, on_disconnect_cb=None, on_connect_cb=None):
         self._client: BleakClient | None = None
         self._lock = asyncio.Lock()
+        # Serializes connect() so concurrent callers (the sender's
+        # ensure_connected and the daemon's reconnect) share one scan/connect
+        # loop. Separate from _lock: GATT ops must not wait on a scan.
+        self._connect_lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._on_disconnect_cb = on_disconnect_cb
         self._on_connect_cb = on_connect_cb
@@ -45,7 +49,20 @@ class ClawdBleClient:
         return self._client is not None and self._client.is_connected
 
     async def connect(self) -> None:
-        """Scan for and connect to the Clawd Tank device. Retries until found."""
+        """Scan for and connect to the Clawd Tank device. Retries until found.
+
+        Single-flight: a caller that arrives while another connect is in
+        progress waits for it and reuses the resulting connection instead of
+        starting a second scan/connect loop (the device accepts only one
+        connection, and tearing down the fresh one would undo the attempt).
+        """
+        joined_in_flight = self._connect_lock.locked()
+        async with self._connect_lock:
+            if joined_in_flight and self.is_connected:
+                return
+            await self._connect_until_found()
+
+    async def _connect_until_found(self) -> None:
         self._loop = asyncio.get_running_loop()
         if self._client is not None:
             await self.disconnect()

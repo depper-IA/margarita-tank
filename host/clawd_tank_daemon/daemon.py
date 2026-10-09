@@ -815,6 +815,16 @@ class ClawdDaemon:
 
     async def add_transport(self, name: str, client: TransportClient) -> None:
         """Add a transport dynamically and start its sender task."""
+        # A sender already running under this name would keep driving the
+        # transport alongside the new one (two scan/connect loops against a
+        # device that accepts a single connection). Stop it first.
+        previous = self._sender_tasks.pop(name, None)
+        if previous is not None and not previous.done():
+            previous.cancel()
+            try:
+                await previous
+            except asyncio.CancelledError:
+                pass
         client._on_connect_cb = lambda: self._on_transport_connect(name)
         client._on_disconnect_cb = lambda: self._on_transport_disconnect(name)
         self._transports[name] = client
@@ -900,6 +910,13 @@ class ClawdDaemon:
         await self._socket.start()
 
         for name in self._transports:
+            # add_transport() may have landed while the socket server was
+            # starting (the menu bar schedules it right after run()); that
+            # transport already has a sender, and a second one would run a
+            # concurrent connect loop against the same device.
+            existing = self._sender_tasks.get(name)
+            if existing is not None and not existing.done():
+                continue
             # Each sender handles its own connect via ensure_connected()
             self._sender_tasks[name] = asyncio.create_task(self._transport_sender(name))
 

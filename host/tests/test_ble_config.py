@@ -297,3 +297,41 @@ async def test_connect_bypasses_windows_gatt_cache():
 
     _, kwargs = client_cls.call_args
     assert kwargs["winrt"] == {"use_cached_services": False}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_connects_share_one_scan_and_connection():
+    """The sender's ensure_connected() and the daemon's reconnect() can ask
+    for a connection at the same time. The device accepts a single
+    connection, so a second caller must join the in-flight attempt instead
+    of starting its own scan/connect loop — and must not tear down the
+    connection that attempt just made."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = MagicMock()
+    bleak_client.connect = AsyncMock()
+    bleak_client.disconnect = AsyncMock()
+    bleak_client.is_connected = True
+    bleak_client.mtu_size = 256
+    scan_gate = asyncio.Event()
+
+    async def slow_scan(*args, **kwargs):
+        await scan_gate.wait()
+        return device
+
+    ble = ClawdBleClient()
+    with patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(side_effect=slow_scan),
+    ) as scan, patch(
+        "clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client
+    ) as client_cls:
+        both = asyncio.gather(ble.ensure_connected(), ble.connect())
+        for _ in range(5):
+            await asyncio.sleep(0)  # let both callers reach the scan
+        scan_gate.set()
+        await both
+
+    assert scan.await_count == 1
+    assert client_cls.call_count == 1
+    bleak_client.disconnect.assert_not_awaited()
+    assert ble.is_connected
