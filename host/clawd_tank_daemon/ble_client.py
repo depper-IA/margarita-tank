@@ -51,6 +51,9 @@ class ClawdBleClient:
         # Collapses the proactive drop (_handle_disconnect) and bleak's own
         # disconnected_callback into a single notification per connection.
         self._disconnect_notified = False
+        # Strong references to scan/connect tasks abandoned by _run_bounded
+        # after a timeout, so they are not garbage-collected mid-flight.
+        self._abandoned_tasks: set[asyncio.Task] = set()
 
     @property
     def is_connected(self) -> bool:
@@ -77,18 +80,14 @@ class ClawdBleClient:
         while True:
             logger.info("Scanning for %s device...", DEVICE_NAME)
             try:
-                device = await asyncio.wait_for(
+                device = await self._run_bounded(
                     BleakScanner.find_device_by_name(
                         DEVICE_NAME, timeout=SCAN_INTERVAL_SECS
                     ),
-                    timeout=SCAN_HARD_TIMEOUT_SECS,
+                    SCAN_HARD_TIMEOUT_SECS,
+                    "BLE scan",
                 )
             except asyncio.TimeoutError:
-                logger.warning(
-                    "BLE scan did not finish within %ss (scanner stop hung); "
-                    "retrying",
-                    SCAN_HARD_TIMEOUT_SECS,
-                )
                 continue
             if device is None:
                 logger.debug("%s not found, retrying...", DEVICE_NAME)
@@ -103,8 +102,9 @@ class ClawdBleClient:
                     disconnected_callback=self._on_disconnect,
                     winrt={"use_cached_services": False},
                 )
-                await asyncio.wait_for(
-                    client.connect(), timeout=CONNECT_HARD_TIMEOUT_SECS
+                # An abandoned attempt's client is never kept as self._client.
+                await self._run_bounded(
+                    client.connect(), CONNECT_HARD_TIMEOUT_SECS, "BLE connect"
                 )
                 self._client = client
                 self._disconnect_notified = False  # re-arm for this connection
@@ -113,14 +113,53 @@ class ClawdBleClient:
                     self._on_connect_cb()
                 return
             except asyncio.TimeoutError:
-                logger.warning(
-                    "Connection did not finish within %ss, retrying...",
-                    CONNECT_HARD_TIMEOUT_SECS,
-                )
                 await asyncio.sleep(SCAN_INTERVAL_SECS)
             except Exception as e:
                 logger.warning("Connection failed: %s, retrying...", e)
                 await asyncio.sleep(SCAN_INTERVAL_SECS)
+
+    async def _run_bounded(self, coro, timeout: float, what: str):
+        """Run ``coro`` as a task and return its result within ``timeout``.
+
+        Plain ``asyncio.wait_for`` is not enough: on timeout (or when the
+        caller is cancelled) it cancels the inner task and then awaits its
+        completion. bleak's WinRT scanner re-runs its unbounded stop() during
+        cancellation cleanup, and its connect cleanup can hang the same way, so
+        that await never returns. Here a timed-out task is cancelled and
+        abandoned instead of awaited, and asyncio.TimeoutError is raised so
+        the caller can retry. If the caller itself is cancelled, the task is
+        cancelled too and the CancelledError propagates.
+        """
+        task = asyncio.ensure_future(coro)
+        try:
+            done, _ = await asyncio.wait({task}, timeout=timeout)
+        except asyncio.CancelledError:
+            self._abandon(task)
+            raise
+        if task in done:
+            return task.result()
+        logger.warning(
+            "%s did not finish within %ss; abandoned it, retrying", what, timeout
+        )
+        self._abandon(task)
+        raise asyncio.TimeoutError(f"{what} timed out after {timeout}s")
+
+    def _abandon(self, task: asyncio.Task) -> None:
+        """Cancel ``task`` without awaiting it, keeping it referenced until
+        it finishes and retrieving its exception so asyncio does not log
+        "Task exception was never retrieved"."""
+        task.cancel()
+        if task.done():
+            return
+        self._abandoned_tasks.add(task)
+        task.add_done_callback(self._on_abandoned_done)
+
+    def _on_abandoned_done(self, task: asyncio.Task) -> None:
+        self._abandoned_tasks.discard(task)
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                logger.debug("Abandoned BLE task finished with: %s", exc)
 
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnect — may be called from a non-event-loop thread."""

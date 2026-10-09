@@ -407,3 +407,148 @@ async def test_connect_retries_when_connect_never_finishes():
     assert client_cls.call_count == 2
     assert ble._client is good
     assert ble.is_connected
+
+
+def _hangs_even_when_cancelled(release: asyncio.Event):
+    """Fake that hangs, and keeps hanging during cancellation cleanup until
+    ``release`` is set — like bleak's WinRT scanner stop() / connect cleanup,
+    which run unbounded awaits in their finally / __aexit__ paths."""
+
+    async def fake(*args, **kwargs):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            await release.wait()  # cleanup hangs like bleak's stop()
+            raise
+
+    return fake
+
+
+async def _release_abandoned(ble: ClawdBleClient, release: asyncio.Event, *tasks):
+    """Let hung-on-cancel fakes finish so no task outlives the test."""
+    release.set()
+    for task in tasks:
+        task.cancel()
+    pending = [*tasks, *getattr(ble, "_abandoned_tasks", ())]
+    if pending:
+        await asyncio.wait(pending, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_connect_retries_when_scan_hangs_even_when_cancelled():
+    """asyncio.wait_for cancels the inner task on timeout and then awaits its
+    completion. bleak's WinRT scanner re-runs its unbounded stop() during
+    cancellation cleanup, so wait_for itself never returns. The connect loop
+    must abandon the hung scan instead of awaiting it, and retry."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = MagicMock()
+    bleak_client.connect = AsyncMock()
+    bleak_client.is_connected = True
+    bleak_client.mtu_size = 256
+    release = asyncio.Event()
+    hung = _hangs_even_when_cancelled(release)
+    calls = 0
+
+    async def hung_then_found(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            await hung()
+        return device
+
+    ble = ClawdBleClient()
+    with patch(
+        "clawd_tank_daemon.ble_client.SCAN_HARD_TIMEOUT_SECS", 0.05
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(side_effect=hung_then_found),
+    ) as scan, patch(
+        "clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client
+    ) as client_cls:
+        outer = asyncio.ensure_future(ble.connect())
+        try:
+            done, _ = await asyncio.wait({outer}, timeout=2)
+            assert outer in done, "connect() hung awaiting a cancelled scan"
+            outer.result()
+        finally:
+            await _release_abandoned(ble, release, outer)
+
+    assert scan.await_count == 2
+    assert client_cls.call_count == 1
+    assert ble.is_connected
+
+
+@pytest.mark.asyncio
+async def test_connect_retries_when_connect_hangs_even_when_cancelled():
+    """Same as the scan case for bleak's WinRT connect cleanup: the hung
+    attempt must be abandoned (not awaited), its BleakClient never kept, and
+    a fresh client tried."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    release = asyncio.Event()
+
+    hung = MagicMock()
+    hung.connect = AsyncMock(side_effect=_hangs_even_when_cancelled(release))
+    hung.is_connected = False
+    good = MagicMock()
+    good.connect = AsyncMock()
+    good.is_connected = True
+    good.mtu_size = 256
+
+    ble = ClawdBleClient()
+    with patch(
+        "clawd_tank_daemon.ble_client.CONNECT_HARD_TIMEOUT_SECS", 0.05
+    ), patch(
+        "clawd_tank_daemon.ble_client.SCAN_INTERVAL_SECS", 0
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(return_value=device),
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakClient", side_effect=[hung, good]
+    ) as client_cls:
+        outer = asyncio.ensure_future(ble.connect())
+        try:
+            done, _ = await asyncio.wait({outer}, timeout=2)
+            assert outer in done, "connect() hung awaiting a cancelled attempt"
+            outer.result()
+        finally:
+            await _release_abandoned(ble, release, outer)
+
+    assert client_cls.call_count == 2
+    assert ble._client is good
+    assert ble.is_connected
+
+
+@pytest.mark.asyncio
+async def test_cancelling_connect_propagates_and_cancels_inner_scan():
+    """remove_transport/shutdown cancel connect(). That cancellation must
+    propagate promptly (not wait for a scan whose cleanup hangs) and must
+    cancel the in-flight scan too."""
+    release = asyncio.Event()
+    inner_cancelled = asyncio.Event()
+
+    async def flag_on_cancel(*args, **kwargs):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            inner_cancelled.set()
+            await release.wait()  # cleanup hangs like bleak's stop()
+            raise
+
+    ble = ClawdBleClient()
+    with patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(side_effect=flag_on_cancel),
+    ):
+        outer = asyncio.ensure_future(ble.connect())
+        try:
+            for _ in range(5):
+                await asyncio.sleep(0)  # let connect() reach the scan
+            outer.cancel()
+            done, _ = await asyncio.wait({outer}, timeout=2)
+            assert outer in done, "cancelled connect() hung on scan cleanup"
+            assert outer.cancelled()
+            assert inner_cancelled.is_set()
+        finally:
+            await _release_abandoned(ble, release, outer)
+
+    assert not ble.is_connected
