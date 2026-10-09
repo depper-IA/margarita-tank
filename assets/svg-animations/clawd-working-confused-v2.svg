@@ -1,0 +1,359 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-15 -25 45 45" width="500" height="500">
+  <!-- Clawd v2 confused: 6 s loop at 8 fps (48 frames). Same beats as clawd-working-confused.svg: left pincer scratching the head, the body and eyes look left then right, three blinks, a cyan ? pops on the left and an amber ? on the right. -->
+  <defs>
+    <style>
+      .stv0 { animation: stv0 6s infinite step-end; }
+      .stv1 { animation: stv1 6s infinite step-end; }
+      .stv2 { animation: stv2 6s infinite step-end; }
+      .stm { animation: stm 6s infinite step-end; }
+      .sshm { animation: sshm 6s infinite step-end; }
+      .slg1m7 { animation: slg1m7 6s infinite step-end; }
+      .slg2m7 { animation: slg2m7 6s infinite step-end; }
+      .slg3m7 { animation: slg3m7 6s infinite step-end; }
+      .slg4m7 { animation: slg4m7 6s infinite step-end; }
+      .sey-eyes-open { animation: sey-eyes-open 6s infinite step-end; }
+      .sey-eyes-shut { animation: sey-eyes-shut 6s infinite step-end; }
+      .sey-mv { animation: sey-mv 6s infinite step-end; }
+      .sal { animation: sal 6s infinite step-end; }
+      .sar { animation: sar 6s infinite step-end; }
+      .qmLn { animation: qmLn 6s infinite step-end; }
+      .qvLn { animation: qvLn 6s infinite step-end; }
+      .qmLs { animation: qmLs 6s infinite step-end; }
+      .qvLs { animation: qvLs 6s infinite step-end; }
+      .qmRn { animation: qmRn 6s infinite step-end; }
+      .qvRn { animation: qvRn 6s infinite step-end; }
+      .qmRs { animation: qmRs 6s infinite step-end; }
+      .qvRs { animation: qvRs 6s infinite step-end; }
+      @keyframes stv0 {
+        0% { opacity: 1; }
+        11.4583% { opacity: 0; }
+        38.5417% { opacity: 1; }
+        46.875% { opacity: 0; }
+        71.875% { opacity: 1; }
+      }
+      @keyframes stv1 {
+        0% { opacity: 0; }
+        11.4583% { opacity: 1; }
+        38.5417% { opacity: 0; }
+      }
+      @keyframes stv2 {
+        0% { opacity: 0; }
+        46.875% { opacity: 1; }
+        71.875% { opacity: 0; }
+      }
+      @keyframes stm {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-2px, 0px); }
+        13.5417% { transform: translate(-4px, 0px); }
+        36.4583% { transform: translate(-2px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(3px, 0px); }
+        48.9583% { transform: translate(4px, 0px); }
+        71.875% { transform: translate(1px, 0px); }
+        73.9583% { transform: translate(0px, 0px); }
+      }
+      @keyframes sshm {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-2px, 0px); }
+        13.5417% { transform: translate(-4px, 0px); }
+        36.4583% { transform: translate(-2px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(3px, 0px); }
+        48.9583% { transform: translate(4px, 0px); }
+        71.875% { transform: translate(1px, 0px); }
+        73.9583% { transform: translate(0px, 0px); }
+      }
+      @keyframes slg1m7 {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-1px, 0px); }
+        13.5417% { transform: translate(-2px, 0px); }
+        36.4583% { transform: translate(-1px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(1px, 0px); }
+        48.9583% { transform: translate(2px, 0px); }
+        71.875% { transform: translate(0px, 0px); }
+      }
+      @keyframes slg2m7 {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-1px, 0px); }
+        13.5417% { transform: translate(-2px, 0px); }
+        36.4583% { transform: translate(-1px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(1px, 0px); }
+        48.9583% { transform: translate(2px, 0px); }
+        71.875% { transform: translate(0px, 0px); }
+      }
+      @keyframes slg3m7 {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-1px, 0px); }
+        13.5417% { transform: translate(-2px, 0px); }
+        36.4583% { transform: translate(-1px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(1px, 0px); }
+        48.9583% { transform: translate(2px, 0px); }
+        71.875% { transform: translate(0px, 0px); }
+      }
+      @keyframes slg4m7 {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-1px, 0px); }
+        13.5417% { transform: translate(-2px, 0px); }
+        36.4583% { transform: translate(-1px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(1px, 0px); }
+        48.9583% { transform: translate(2px, 0px); }
+        71.875% { transform: translate(0px, 0px); }
+      }
+      @keyframes sey-eyes-open {
+        0% { opacity: 1; }
+        13.5417% { opacity: 0; }
+        15.625% { opacity: 1; }
+        48.9583% { opacity: 0; }
+        51.0417% { opacity: 1; }
+        80.2083% { opacity: 0; }
+        82.2917% { opacity: 1; }
+      }
+      @keyframes sey-eyes-shut {
+        0% { opacity: 0; }
+        13.5417% { opacity: 1; }
+        15.625% { opacity: 0; }
+        48.9583% { opacity: 1; }
+        51.0417% { opacity: 0; }
+        80.2083% { opacity: 1; }
+        82.2917% { opacity: 0; }
+      }
+      @keyframes sey-mv {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-3px, 0px); }
+        13.5417% { transform: translate(-6px, 0px); }
+        36.4583% { transform: translate(-3px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(4px, 0px); }
+        48.9583% { transform: translate(6px, 0px); }
+        71.875% { transform: translate(2px, 0px); }
+        73.9583% { transform: translate(0px, 0px); }
+      }
+      @keyframes sal {
+        0% { transform: translate(0px, -7px); }
+        11.4583% { transform: translate(-2px, -7px); }
+        13.5417% { transform: translate(-4px, -7px); }
+        36.4583% { transform: translate(-2px, -7px); }
+        38.5417% { transform: translate(0px, -7px); }
+        46.875% { transform: translate(3px, -7px); }
+        48.9583% { transform: translate(4px, -7px); }
+        71.875% { transform: translate(1px, -7px); }
+        73.9583% { transform: translate(0px, -7px); }
+      }
+      @keyframes sar {
+        0% { transform: translate(0px, 0px); }
+        11.4583% { transform: translate(-2px, 0px); }
+        13.5417% { transform: translate(-4px, 0px); }
+        36.4583% { transform: translate(-2px, 0px); }
+        38.5417% { transform: translate(0px, 0px); }
+        46.875% { transform: translate(3px, 0px); }
+        48.9583% { transform: translate(4px, 0px); }
+        71.875% { transform: translate(1px, 0px); }
+        73.9583% { transform: translate(0px, 0px); }
+      }
+      @keyframes qmLn {
+        0% { transform: translate(0px, 0px); }
+        17.7083% { transform: translate(-8px, 5px); }
+        19.7917% { transform: translate(-8px, -1px); }
+        30.2083% { transform: translate(-8px, -3px); }
+        32.2917% { transform: translate(0px, 0px); }
+      }
+      @keyframes qvLn {
+        0% { opacity: 0; }
+        17.7083% { opacity: 1; }
+        32.2917% { opacity: 0; }
+      }
+      @keyframes qmLs {
+        0% { transform: translate(0px, 0px); }
+        15.625% { transform: translate(-7px, 12px); }
+        17.7083% { transform: translate(0px, 0px); }
+        32.2917% { transform: translate(-7px, -6px); }
+        34.375% { transform: translate(0px, 0px); }
+      }
+      @keyframes qvLs {
+        0% { opacity: 0; }
+        15.625% { opacity: 1; }
+        17.7083% { opacity: 0; }
+        32.2917% { opacity: 1; }
+        34.375% { opacity: 0; }
+      }
+      @keyframes qmRn {
+        0% { transform: translate(0px, 0px); }
+        53.125% { transform: translate(15px, 5px); }
+        55.2083% { transform: translate(15px, -1px); }
+        65.625% { transform: translate(15px, -3px); }
+        67.7083% { transform: translate(0px, 0px); }
+      }
+      @keyframes qvRn {
+        0% { opacity: 0; }
+        53.125% { opacity: 1; }
+        67.7083% { opacity: 0; }
+      }
+      @keyframes qmRs {
+        0% { transform: translate(0px, 0px); }
+        51.0417% { transform: translate(16px, 12px); }
+        53.125% { transform: translate(0px, 0px); }
+        67.7083% { transform: translate(16px, -6px); }
+        69.7917% { transform: translate(0px, 0px); }
+      }
+      @keyframes qvRs {
+        0% { opacity: 0; }
+        51.0417% { opacity: 1; }
+        53.125% { opacity: 0; }
+        67.7083% { opacity: 1; }
+        69.7917% { opacity: 0; }
+      }
+    </style>
+    <!-- ===== rig: shared Clawd v2 parts, identical in every clawd-*-v2.svg (see clawd-static-base-v2.svg) ===== -->
+    <!-- body: 1 px outline, light top/left, shade bottom/right, specular dot -->
+    <g id="torso">
+      <path fill="#DE886D" d="M24 13h1v1h-1zM8 14h16v1h-16zM6 15h18v8h-18zM5 23h1v2h-1z"/>
+      <path fill="#B8644B" d="M24 14h1v9h-1zM6 23h19v2h-19z"/>
+      <path fill="#6B3122" d="M4 12h22v1h-22zM4 13h1v12h-1zM25 13h1v12h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
+      <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
+    </g>
+    <!-- right pincer fused with the body (rest spot and sliding along the body side) -->
+    <g id="arm-r">
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM25 21h5v1h-5z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M25 16h4v1h-4zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M25 17h3v4h-3z"/>
+    </g>
+    <!-- left pincer, closed outline (any position) -->
+    <g id="arm-l-free">
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM4 16h1v6h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h3v1h-3zM1 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M2 17h2v4h-2z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h4v1h-4z"/>
+    </g>
+    <!-- eyes 2x4 with a white highlight -->
+    <g id="eyes-open">
+      <path fill="#FFFFFF" d="M8 16h1v1h-1zM20 16h1v1h-1z"/>
+      <path fill="#1B1311" d="M9 16h1v1h-1zM21 16h1v1h-1zM8 17h2v3h-2zM20 17h2v3h-2z"/>
+    </g>
+    <!-- eyes shut, 2x1 line -->
+    <g id="eyes-shut">
+      <path fill="#1B1311" d="M8 19h2v1h-2zM20 19h2v1h-2z"/>
+    </g>
+    <!-- leg 1, 7 px long -->
+    <g id="leg1-n7">
+      <path fill="#B8644B" d="M6 23h1v6h-1z"/>
+      <path fill="#6B3122" d="M7 23h1v6h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2, 7 px long -->
+    <g id="leg2-n7">
+      <path fill="#B8644B" d="M10 23h1v6h-1z"/>
+      <path fill="#6B3122" d="M11 23h1v6h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3, 7 px long -->
+    <g id="leg3-n7">
+      <path fill="#B8644B" d="M18 23h1v6h-1z"/>
+      <path fill="#6B3122" d="M19 23h1v6h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4, 7 px long -->
+    <g id="leg4-n7">
+      <path fill="#B8644B" d="M22 23h1v6h-1z"/>
+      <path fill="#6B3122" d="M23 23h1v6h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- leaning body 22x14 -->
+    <g id="torso-22x14-lp1p0p0">
+      <path fill="#DE886D" d="M8 14h17v1h-17zM6 15h18v8h-18z"/>
+      <path fill="#B8644B" d="M25 13h1v2h-1zM24 15h1v8h-1zM5 23h20v2h-20z"/>
+      <path fill="#6B3122" d="M5 12h22v1h-22zM5 13h1v2h-1zM26 13h1v2h-1zM4 15h1v10h-1zM25 15h1v10h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M6 13h19v1h-19zM5 15h1v8h-1z"/>
+      <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
+    </g>
+    <!-- leaning body 22x14 -->
+    <g id="torso-22x14-lm1p0p0">
+      <path fill="#DE886D" d="M6 14h17v1h-17zM6 15h18v8h-18z"/>
+      <path fill="#B8644B" d="M4 13h1v1h-1zM23 13h1v2h-1zM24 15h1v8h-1zM5 23h20v2h-20z"/>
+      <path fill="#6B3122" d="M3 12h22v1h-22zM3 13h1v2h-1zM24 13h1v2h-1zM4 15h1v10h-1zM25 15h1v10h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M5 13h18v1h-18zM5 15h1v8h-1z"/>
+      <path fill="#FFD3C2" d="M4 14h2v1h-2z"/>
+    </g>
+    <!-- ground shadow 24 wide -->
+    <g id="shadow-w24">
+      <path fill="#000000" fill-opacity="0.3" d="M3 30h24v1h-24z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M6 31h18v1h-18z"/>
+    </g>
+    <!-- ===== props used by this animation ===== -->
+    <g id="qL-n">
+      <path fill="#40C4FF" d="M1 0h4v2h-4zM0 2h2v2h-2zM4 2h2v3h-2zM3 5h2v2h-2zM2 7h2v2h-2zM2 10h2v2h-2z"/>
+    </g>
+    <g id="qL-s">
+      <path fill="#40C4FF" d="M1 0h2v1h-2zM0 1h1v1h-1zM3 1h1v2h-1zM2 3h1v1h-1zM1 4h1v1h-1zM1 6h1v1h-1z"/>
+    </g>
+    <g id="qR-n">
+      <path fill="#FFC107" d="M1 0h4v2h-4zM0 2h2v2h-2zM4 2h2v3h-2zM3 5h2v2h-2zM2 7h2v2h-2zM2 10h2v2h-2z"/>
+    </g>
+    <g id="qR-s">
+      <path fill="#FFC107" d="M1 0h2v1h-2zM0 1h1v1h-1zM3 1h1v2h-1zM2 3h1v1h-1zM1 4h1v1h-1zM1 6h1v1h-1z"/>
+    </g>
+  </defs>
+  <g transform="scale(.5)">
+    <g class="sshm">
+    <use href="#shadow-w24"/>
+    </g>
+    <g class="slg1m7">
+    <use href="#leg1-n7"/>
+    </g>
+    <g class="slg2m7">
+    <use href="#leg2-n7"/>
+    </g>
+    <g class="slg3m7">
+    <use href="#leg3-n7"/>
+    </g>
+    <g class="slg4m7">
+    <use href="#leg4-n7"/>
+    </g>
+    <g class="stm">
+    <g class="stv0">
+    <use href="#torso"/>
+    </g>
+    <g class="stv1">
+    <use href="#torso-22x14-lm1p0p0"/>
+    </g>
+    <g class="stv2">
+    <use href="#torso-22x14-lp1p0p0"/>
+    </g>
+    </g>
+    <g class="sal">
+    <use href="#arm-l-free"/>
+    </g>
+    <g class="sar">
+    <use href="#arm-r"/>
+    </g>
+    <g class="sey-mv">
+    <g class="sey-eyes-open">
+    <use href="#eyes-open"/>
+    </g>
+    <g class="sey-eyes-shut">
+    <use href="#eyes-shut"/>
+    </g>
+    </g>
+    <g class="qvLn">
+    <g class="qmLn">
+    <use href="#qL-n"/>
+    </g>
+    </g>
+    <g class="qvLs">
+    <g class="qmLs">
+    <use href="#qL-s"/>
+    </g>
+    </g>
+    <g class="qvRn">
+    <g class="qmRn">
+    <use href="#qR-n"/>
+    </g>
+    </g>
+    <g class="qvRs">
+    <g class="qmRs">
+    <use href="#qR-s"/>
+    </g>
+    </g>
+  </g>
+</svg>

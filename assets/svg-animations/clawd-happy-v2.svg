@@ -1,0 +1,569 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -15 40 40" width="500" height="500">
+  <!-- Clawd v2 happy: 2 s loop at 10 fps (20 frames): two hops with squash, flapping pincers, happy eyes, twinkling sparkles. Sparkle timing is explicit per frame (no <use> + CSS variable delays). -->
+  <defs>
+    <style>
+      .sh-shadow { animation: sh-shadow 2s infinite step-end; }
+      .sh-shadow-sm { animation: sh-shadow-sm 2s infinite step-end; }
+      .sh-shadow-xs { animation: sh-shadow-xs 2s infinite step-end; }
+      .ar-l { animation: ar-l 2s infinite step-end; }
+      .ar-l-k0 { animation: ar-l-k0 2s infinite step-end; }
+      .ar-l-k1 { animation: ar-l-k1 2s infinite step-end; }
+      .ar-r { animation: ar-r 2s infinite step-end; }
+      .ar-r-k0 { animation: ar-r-k0 2s infinite step-end; }
+      .ar-r-k1 { animation: ar-r-k1 2s infinite step-end; }
+      .sq { animation: sq 2s infinite step-end; }
+      .hop { animation: hop 2s infinite step-end; }
+      .spv0-dot { animation: spv0-dot 2s infinite step-end; }
+      .spv0-star { animation: spv0-star 2s infinite step-end; }
+      .spv0-ring { animation: spv0-ring 2s infinite step-end; }
+      .spv1-dot { animation: spv1-dot 2s infinite step-end; }
+      .spv1-star { animation: spv1-star 2s infinite step-end; }
+      .spv1-ring { animation: spv1-ring 2s infinite step-end; }
+      .spv2-dot { animation: spv2-dot 2s infinite step-end; }
+      .spv2-star { animation: spv2-star 2s infinite step-end; }
+      .spv2-ring { animation: spv2-ring 2s infinite step-end; }
+      .spv3-dot { animation: spv3-dot 2s infinite step-end; }
+      .spv3-star { animation: spv3-star 2s infinite step-end; }
+      .spv3-ring { animation: spv3-ring 2s infinite step-end; }
+      .spv4-dot { animation: spv4-dot 2s infinite step-end; }
+      .spv4-star { animation: spv4-star 2s infinite step-end; }
+      .spv4-ring { animation: spv4-ring 2s infinite step-end; }
+      .spv5-dot { animation: spv5-dot 2s infinite step-end; }
+      .spv5-star { animation: spv5-star 2s infinite step-end; }
+      .spv5-ring { animation: spv5-ring 2s infinite step-end; }
+      @keyframes sh-shadow {
+        0% { opacity: 1; }
+        12.5% { opacity: 0; }
+        37.5% { opacity: 1; }
+        62.5% { opacity: 0; }
+        87.5% { opacity: 1; }
+      }
+      @keyframes sh-shadow-sm {
+        0% { opacity: 0; }
+        12.5% { opacity: 1; }
+        17.5% { opacity: 0; }
+        32.5% { opacity: 1; }
+        37.5% { opacity: 0; }
+        62.5% { opacity: 1; }
+        67.5% { opacity: 0; }
+        82.5% { opacity: 1; }
+        87.5% { opacity: 0; }
+      }
+      @keyframes sh-shadow-xs {
+        0% { opacity: 0; }
+        17.5% { opacity: 1; }
+        32.5% { opacity: 0; }
+        67.5% { opacity: 1; }
+        82.5% { opacity: 0; }
+      }
+      @keyframes ar-l {
+        0% { transform: translate(-2px, -4px); }
+        2.5% { transform: translate(-3px, -9px); }
+        7.5% { transform: translate(-2px, -4px); }
+        12.5% { transform: translate(-3px, -9px); }
+        17.5% { transform: translate(-2px, -4px); }
+        22.5% { transform: translate(-3px, -9px); }
+        27.5% { transform: translate(-2px, -4px); }
+        32.5% { transform: translate(-3px, -9px); }
+        37.5% { transform: translate(-2px, -4px); }
+        42.5% { transform: translate(-3px, -9px); }
+        47.5% { transform: translate(-2px, -4px); }
+        52.5% { transform: translate(-3px, -9px); }
+        57.5% { transform: translate(-2px, -4px); }
+        62.5% { transform: translate(-3px, -9px); }
+        67.5% { transform: translate(-2px, -4px); }
+        72.5% { transform: translate(-3px, -9px); }
+        77.5% { transform: translate(-2px, -4px); }
+        82.5% { transform: translate(-3px, -9px); }
+        87.5% { transform: translate(-2px, -4px); }
+        92.5% { transform: translate(-3px, -9px); }
+      }
+      @keyframes ar-l-k0 {
+        0% { opacity: 0; }
+        2.5% { opacity: 1; }
+        7.5% { opacity: 0; }
+        12.5% { opacity: 1; }
+        17.5% { opacity: 0; }
+        22.5% { opacity: 1; }
+        27.5% { opacity: 0; }
+        32.5% { opacity: 1; }
+        37.5% { opacity: 0; }
+        42.5% { opacity: 1; }
+        47.5% { opacity: 0; }
+        52.5% { opacity: 1; }
+        57.5% { opacity: 0; }
+        62.5% { opacity: 1; }
+        67.5% { opacity: 0; }
+        72.5% { opacity: 1; }
+        77.5% { opacity: 0; }
+        82.5% { opacity: 1; }
+        87.5% { opacity: 0; }
+        92.5% { opacity: 1; }
+      }
+      @keyframes ar-l-k1 {
+        0% { opacity: 1; }
+        2.5% { opacity: 0; }
+        7.5% { opacity: 1; }
+        12.5% { opacity: 0; }
+        17.5% { opacity: 1; }
+        22.5% { opacity: 0; }
+        27.5% { opacity: 1; }
+        32.5% { opacity: 0; }
+        37.5% { opacity: 1; }
+        42.5% { opacity: 0; }
+        47.5% { opacity: 1; }
+        52.5% { opacity: 0; }
+        57.5% { opacity: 1; }
+        62.5% { opacity: 0; }
+        67.5% { opacity: 1; }
+        72.5% { opacity: 0; }
+        77.5% { opacity: 1; }
+        82.5% { opacity: 0; }
+        87.5% { opacity: 1; }
+        92.5% { opacity: 0; }
+      }
+      @keyframes ar-r {
+        0% { transform: translate(2px, -4px); }
+        2.5% { transform: translate(3px, -9px); }
+        7.5% { transform: translate(2px, -4px); }
+        12.5% { transform: translate(3px, -9px); }
+        17.5% { transform: translate(2px, -4px); }
+        22.5% { transform: translate(3px, -9px); }
+        27.5% { transform: translate(2px, -4px); }
+        32.5% { transform: translate(3px, -9px); }
+        37.5% { transform: translate(2px, -4px); }
+        42.5% { transform: translate(3px, -9px); }
+        47.5% { transform: translate(2px, -4px); }
+        52.5% { transform: translate(3px, -9px); }
+        57.5% { transform: translate(2px, -4px); }
+        62.5% { transform: translate(3px, -9px); }
+        67.5% { transform: translate(2px, -4px); }
+        72.5% { transform: translate(3px, -9px); }
+        77.5% { transform: translate(2px, -4px); }
+        82.5% { transform: translate(3px, -9px); }
+        87.5% { transform: translate(2px, -4px); }
+        92.5% { transform: translate(3px, -9px); }
+      }
+      @keyframes ar-r-k0 {
+        0% { opacity: 1; }
+        2.5% { opacity: 0; }
+        7.5% { opacity: 1; }
+        12.5% { opacity: 0; }
+        17.5% { opacity: 1; }
+        22.5% { opacity: 0; }
+        27.5% { opacity: 1; }
+        32.5% { opacity: 0; }
+        37.5% { opacity: 1; }
+        42.5% { opacity: 0; }
+        47.5% { opacity: 1; }
+        52.5% { opacity: 0; }
+        57.5% { opacity: 1; }
+        62.5% { opacity: 0; }
+        67.5% { opacity: 1; }
+        72.5% { opacity: 0; }
+        77.5% { opacity: 1; }
+        82.5% { opacity: 0; }
+        87.5% { opacity: 1; }
+        92.5% { opacity: 0; }
+      }
+      @keyframes ar-r-k1 {
+        0% { opacity: 0; }
+        2.5% { opacity: 1; }
+        7.5% { opacity: 0; }
+        12.5% { opacity: 1; }
+        17.5% { opacity: 0; }
+        22.5% { opacity: 1; }
+        27.5% { opacity: 0; }
+        32.5% { opacity: 1; }
+        37.5% { opacity: 0; }
+        42.5% { opacity: 1; }
+        47.5% { opacity: 0; }
+        52.5% { opacity: 1; }
+        57.5% { opacity: 0; }
+        62.5% { opacity: 1; }
+        67.5% { opacity: 0; }
+        72.5% { opacity: 1; }
+        77.5% { opacity: 0; }
+        82.5% { opacity: 1; }
+        87.5% { opacity: 0; }
+        92.5% { opacity: 1; }
+      }
+      @keyframes sq {
+        0% { transform: translate(0px, 0px); }
+        7.5% { transform: translate(0px, 3px); }
+        12.5% { transform: translate(0px, 0px); }
+        37.5% { transform: translate(0px, 3px); }
+        42.5% { transform: translate(0px, 0px); }
+        57.5% { transform: translate(0px, 3px); }
+        62.5% { transform: translate(0px, 0px); }
+        87.5% { transform: translate(0px, 3px); }
+        92.5% { transform: translate(0px, 0px); }
+      }
+      @keyframes hop {
+        0% { transform: translate(0px, 0px); }
+        12.5% { transform: translate(0px, -10px); }
+        17.5% { transform: translate(0px, -20px); }
+        22.5% { transform: translate(0px, -24px); }
+        27.5% { transform: translate(0px, -20px); }
+        32.5% { transform: translate(0px, -10px); }
+        37.5% { transform: translate(0px, 0px); }
+        62.5% { transform: translate(0px, -10px); }
+        67.5% { transform: translate(0px, -20px); }
+        72.5% { transform: translate(0px, -24px); }
+        77.5% { transform: translate(0px, -20px); }
+        82.5% { transform: translate(0px, -10px); }
+        87.5% { transform: translate(0px, 0px); }
+      }
+      @keyframes spv0-dot {
+        0% { opacity: 0; }
+        7.5% { opacity: 1; }
+        12.5% { opacity: 0; }
+      }
+      @keyframes spv0-star {
+        0% { opacity: 0; }
+        12.5% { opacity: 1; }
+        22.5% { opacity: 0; }
+      }
+      @keyframes spv0-ring {
+        0% { opacity: 0; }
+        22.5% { opacity: 1; }
+        27.5% { opacity: 0; }
+      }
+      @keyframes spv1-dot {
+        0% { opacity: 0; }
+        22.5% { opacity: 1; }
+        27.5% { opacity: 0; }
+      }
+      @keyframes spv1-star {
+        0% { opacity: 0; }
+        27.5% { opacity: 1; }
+        37.5% { opacity: 0; }
+      }
+      @keyframes spv1-ring {
+        0% { opacity: 0; }
+        37.5% { opacity: 1; }
+        42.5% { opacity: 0; }
+      }
+      @keyframes spv2-dot {
+        0% { opacity: 0; }
+        37.5% { opacity: 1; }
+        42.5% { opacity: 0; }
+      }
+      @keyframes spv2-star {
+        0% { opacity: 0; }
+        42.5% { opacity: 1; }
+        52.5% { opacity: 0; }
+      }
+      @keyframes spv2-ring {
+        0% { opacity: 0; }
+        52.5% { opacity: 1; }
+        57.5% { opacity: 0; }
+      }
+      @keyframes spv3-dot {
+        0% { opacity: 0; }
+        52.5% { opacity: 1; }
+        57.5% { opacity: 0; }
+      }
+      @keyframes spv3-star {
+        0% { opacity: 0; }
+        57.5% { opacity: 1; }
+        67.5% { opacity: 0; }
+      }
+      @keyframes spv3-ring {
+        0% { opacity: 0; }
+        67.5% { opacity: 1; }
+        72.5% { opacity: 0; }
+      }
+      @keyframes spv4-dot {
+        0% { opacity: 0; }
+        67.5% { opacity: 1; }
+        72.5% { opacity: 0; }
+      }
+      @keyframes spv4-star {
+        0% { opacity: 0; }
+        72.5% { opacity: 1; }
+        82.5% { opacity: 0; }
+      }
+      @keyframes spv4-ring {
+        0% { opacity: 0; }
+        82.5% { opacity: 1; }
+        87.5% { opacity: 0; }
+      }
+      @keyframes spv5-dot {
+        0% { opacity: 0; }
+        42.5% { opacity: 1; }
+        47.5% { opacity: 0; }
+      }
+      @keyframes spv5-star {
+        0% { opacity: 0; }
+        47.5% { opacity: 1; }
+        57.5% { opacity: 0; }
+      }
+      @keyframes spv5-ring {
+        0% { opacity: 0; }
+        57.5% { opacity: 1; }
+        62.5% { opacity: 0; }
+      }
+    </style>
+    <!-- ===== rig: shared Clawd v2 parts, identical in every clawd-*-v2.svg (see clawd-static-base-v2.svg) ===== -->
+    <!-- ground shadow, two translucent rows -->
+    <g id="shadow">
+      <path fill="#000000" fill-opacity="0.3" d="M3 30h24v1h-24z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M6 31h18v1h-18z"/>
+    </g>
+    <!-- ground shadow, small (body in the air) -->
+    <g id="shadow-sm">
+      <path fill="#000000" fill-opacity="0.3" d="M6 30h18v1h-18z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M9 31h12v1h-12z"/>
+    </g>
+    <!-- ground shadow, tiny (body high in the air) -->
+    <g id="shadow-xs">
+      <path fill="#000000" fill-opacity="0.3" d="M9 30h12v1h-12z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M12 31h6v1h-6z"/>
+    </g>
+    <!-- leg 1 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg1">
+      <path fill="#B8644B" d="M6 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M7 18h1v11h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg2">
+      <path fill="#B8644B" d="M10 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M11 18h1v11h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg3">
+      <path fill="#B8644B" d="M18 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M19 18h1v11h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4 of 4 (drawn tall; the top is hidden behind the body) -->
+    <g id="leg4">
+      <path fill="#B8644B" d="M22 18h1v11h-1z"/>
+      <path fill="#6B3122" d="M23 18h1v11h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- body: 1 px outline, light top/left, shade bottom/right, specular dot -->
+    <g id="torso">
+      <path fill="#DE886D" d="M24 13h1v1h-1zM8 14h16v1h-16zM6 15h18v8h-18zM5 23h1v2h-1z"/>
+      <path fill="#B8644B" d="M24 14h1v9h-1zM6 23h19v2h-19z"/>
+      <path fill="#6B3122" d="M4 12h22v1h-22zM4 13h1v12h-1zM25 13h1v12h-1zM4 25h22v1h-22z"/>
+      <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
+      <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
+    </g>
+    <!-- left pincer, closed outline (any position) -->
+    <g id="arm-l-free">
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM4 16h1v6h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h3v1h-3zM1 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M2 17h2v4h-2z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h4v1h-4z"/>
+    </g>
+    <!-- right pincer, closed outline (any position) -->
+    <g id="arm-r-free">
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM26 21h4v1h-4z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM25 16h1v6h-1zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M26 16h3v1h-3zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M26 17h2v4h-2z"/>
+    </g>
+    <!-- eyes happy, upturned arcs -->
+    <g id="eyes-happy">
+      <path fill="#1B1311" d="M8 18h2v1h-2zM20 18h2v1h-2zM7 19h1v1h-1zM10 19h1v1h-1zM19 19h1v1h-1zM22 19h1v1h-1z"/>
+    </g>
+    <!-- blush patches -->
+    <g id="blush">
+      <path fill="#EA7C7E" d="M7 20h2v1h-2zM21 20h2v1h-2zM6 21h1v1h-1zM9 21h1v1h-1zM20 21h1v1h-1zM23 21h1v1h-1zM7 22h2v1h-2zM21 22h2v1h-2z"/>
+      <path fill="#F7A3A1" d="M7 21h2v1h-2zM21 21h2v1h-2z"/>
+    </g>
+    <!-- open smile with tongue -->
+    <g id="smile-open">
+      <path fill="#1B1311" d="M12 21h6v1h-6zM13 22h1v1h-1zM16 22h1v1h-1z"/>
+      <path fill="#EA7C7E" d="M14 22h2v1h-2z"/>
+    </g>
+    <!-- ===== props used by this animation ===== -->
+    <g id="sp0-dot">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+    </g>
+    <g id="sp0-star">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+      <path fill="#FFD700" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp0-ring">
+      <path fill="#FFD700" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp1-dot">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+    </g>
+    <g id="sp1-star">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+      <path fill="#FFA000" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp1-ring">
+      <path fill="#FFA000" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp2-dot">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+    </g>
+    <g id="sp2-star">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+      <path fill="#FFF59D" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp2-ring">
+      <path fill="#FFF59D" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp3-dot">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+    </g>
+    <g id="sp3-star">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+      <path fill="#FFC107" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp3-ring">
+      <path fill="#FFC107" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp4-dot">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+    </g>
+    <g id="sp4-star">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+      <path fill="#FFF59D" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp4-ring">
+      <path fill="#FFF59D" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp5-dot">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+    </g>
+    <g id="sp5-star">
+      <path fill="#FFF8D6" d="M2 2h1v1h-1z"/>
+      <path fill="#FFD700" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+    <g id="sp5-ring">
+      <path fill="#FFD700" d="M2 0h1v2h-1zM0 2h2v1h-2zM3 2h2v1h-2zM2 3h1v2h-1z"/>
+    </g>
+  </defs>
+  <g transform="scale(.5)">
+    <g transform="translate(-10 -6)">
+    <g class="spv0-dot">
+    <use href="#sp0-dot"/>
+    </g>
+    <g class="spv0-star">
+    <use href="#sp0-star"/>
+    </g>
+    <g class="spv0-ring">
+    <use href="#sp0-ring"/>
+    </g>
+    </g>
+    <g transform="translate(34 -10)">
+    <g class="spv1-dot">
+    <use href="#sp1-dot"/>
+    </g>
+    <g class="spv1-star">
+    <use href="#sp1-star"/>
+    </g>
+    <g class="spv1-ring">
+    <use href="#sp1-ring"/>
+    </g>
+    </g>
+    <g transform="translate(38 18)">
+    <g class="spv2-dot">
+    <use href="#sp2-dot"/>
+    </g>
+    <g class="spv2-star">
+    <use href="#sp2-star"/>
+    </g>
+    <g class="spv2-ring">
+    <use href="#sp2-ring"/>
+    </g>
+    </g>
+    <g transform="translate(-14 22)">
+    <g class="spv3-dot">
+    <use href="#sp3-dot"/>
+    </g>
+    <g class="spv3-star">
+    <use href="#sp3-star"/>
+    </g>
+    <g class="spv3-ring">
+    <use href="#sp3-ring"/>
+    </g>
+    </g>
+    <g transform="translate(12 -18)">
+    <g class="spv4-dot">
+    <use href="#sp4-dot"/>
+    </g>
+    <g class="spv4-star">
+    <use href="#sp4-star"/>
+    </g>
+    <g class="spv4-ring">
+    <use href="#sp4-ring"/>
+    </g>
+    </g>
+    <g transform="translate(-6 10)">
+    <g class="spv5-dot">
+    <use href="#sp5-dot"/>
+    </g>
+    <g class="spv5-star">
+    <use href="#sp5-star"/>
+    </g>
+    <g class="spv5-ring">
+    <use href="#sp5-ring"/>
+    </g>
+    </g>
+    <g class="sh-shadow">
+    <use href="#shadow"/>
+    </g>
+    <g class="sh-shadow-sm">
+    <use href="#shadow-sm"/>
+    </g>
+    <g class="sh-shadow-xs">
+    <use href="#shadow-xs"/>
+    </g>
+    <g class="hop">
+    <use href="#leg1"/>
+    <use href="#leg2"/>
+    <use href="#leg3"/>
+    <use href="#leg4"/>
+    <g class="sq">
+    <use href="#torso"/>
+    <g class="ar-l">
+    <use href="#arm-l-free"/>
+    </g>
+    <g class="ar-l-k0">
+    <g>
+      <path fill="#6B3122" d="M1 13h5v1h-5zM1 18h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 14h5v1h-5z"/>
+      <path fill="#DE886D" d="M1 15h5v2h-5z"/>
+      <path fill="#B8644B" d="M1 17h5v1h-5z"/>
+    </g>
+    </g>
+    <g class="ar-l-k1">
+    <g>
+      <path fill="#6B3122" d="M2 13h4v1h-4zM2 18h4v1h-4z"/>
+      <path fill="#F3AC90" d="M2 14h4v1h-4z"/>
+      <path fill="#DE886D" d="M2 15h4v2h-4z"/>
+      <path fill="#B8644B" d="M2 17h4v1h-4z"/>
+    </g>
+    </g>
+    <g class="ar-r">
+    <use href="#arm-r-free"/>
+    </g>
+    <g class="ar-r-k0">
+    <g>
+      <path fill="#6B3122" d="M24 13h4v1h-4zM24 18h4v1h-4z"/>
+      <path fill="#F3AC90" d="M24 14h4v1h-4z"/>
+      <path fill="#DE886D" d="M24 15h4v2h-4z"/>
+      <path fill="#B8644B" d="M24 17h4v1h-4z"/>
+    </g>
+    </g>
+    <g class="ar-r-k1">
+    <g>
+      <path fill="#6B3122" d="M24 13h5v1h-5zM24 18h5v1h-5z"/>
+      <path fill="#F3AC90" d="M24 14h5v1h-5z"/>
+      <path fill="#DE886D" d="M24 15h5v2h-5z"/>
+      <path fill="#B8644B" d="M24 17h5v1h-5z"/>
+    </g>
+    </g>
+    <use href="#eyes-happy"/>
+    <use href="#blush"/>
+    <use href="#smile-open"/>
+    </g>
+    </g>
+  </g>
+</svg>

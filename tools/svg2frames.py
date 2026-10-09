@@ -12,6 +12,9 @@ Usage:
       --duration auto  Animation duration in seconds, or 'auto' to detect from SVG (default: auto)
       --scale 6        Scale multiplier from SVG units to pixels (default: 6)
       --background transparent  Background color or 'transparent' (default: transparent)
+      --snap quantized Colour snapping after rendering: 'quantized' (legacy: keep the 12 most
+                       common colours, rounded down to multiples of 16) or 'exact' (snap only to
+                       the colours written in the SVG source, so rich palettes stay intact)
 
 Example:
     python tools/svg2frames.py assets/svg-animations/clawd-happy.svg /tmp/happy-frames/ --fps 10 --scale 6
@@ -183,7 +186,26 @@ requestAnimationFrame(function() {{
     return html, canvas_w, canvas_h
 
 
-def snap_pixel_art(frame_path: Path, num_colors: int = 12):
+# Colours written in an SVG as presentation attributes (fill="#abc") or CSS
+# declarations (fill: #aabbcc;). Ids such as href="#add" are not matched.
+_SVG_COLOR_RE = re.compile(
+    r'(?:fill|stroke|stop-color|flood-color|(?<![-\w])color)\s*[:=]\s*["\']?\s*'
+    r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])'
+)
+
+
+def extract_svg_palette(svg_text: str):
+    """Return the sorted list of distinct (r, g, b) colours written in the SVG source."""
+    colors = set()
+    for match in _SVG_COLOR_RE.finditer(svg_text):
+        digits = match.group(1)
+        if len(digits) == 3:
+            digits = "".join(ch * 2 for ch in digits)
+        colors.add((int(digits[0:2], 16), int(digits[2:4], 16), int(digits[4:6], 16)))
+    return sorted(colors)
+
+
+def snap_pixel_art(frame_path: Path, num_colors: int = 12, palette=None):
     """
     Post-process a rendered frame to remove anti-aliasing artifacts.
 
@@ -191,6 +213,11 @@ def snap_pixel_art(frame_path: Path, num_colors: int = 12):
     pixel-art edges even with shape-rendering: crispEdges. This snaps every
     pixel to the nearest color in an auto-detected palette, eliminating
     intermediate anti-aliased colors.
+
+    With ``palette`` (a list of (r, g, b) taken from the SVG source) the snap is
+    exact instead: solid pixels are matched against that palette only, so art
+    with more than ``num_colors`` colours keeps its exact values and only true
+    anti-aliasing leftovers move to the nearest declared colour.
     """
     from PIL import Image
     import numpy as np
@@ -216,6 +243,16 @@ def snap_pixel_art(frame_path: Path, num_colors: int = 12):
 
     # Build palette from solid pixels (the "true" sprite colors)
     if not np.any(solid_mask):
+        data[:, :, 3] = alpha_out
+        Image.fromarray(data, "RGBA").save(frame_path)
+        return
+
+    if palette:
+        exact = np.array(palette, dtype=np.float32)
+        solid_rgb = rgb[solid_mask].astype(np.float32)
+        dists = np.sum((solid_rgb[:, None, :] - exact[None, :, :]) ** 2, axis=2)
+        rgb[solid_mask] = exact[np.argmin(dists, axis=1)].astype(np.uint8)
+        data[:, :, :3] = rgb
         data[:, :, 3] = alpha_out
         Image.fromarray(data, "RGBA").save(frame_path)
         return
@@ -260,6 +297,7 @@ def render_frames(
     duration: float,
     scale: float,
     background: str,
+    snap: str = "quantized",
 ):
     """Render SVG animation frames at the exact target size using Playwright."""
     from playwright.sync_api import sync_playwright
@@ -267,6 +305,9 @@ def render_frames(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     html_content, canvas_w, canvas_h = build_html_wrapper(svg_path, scale, background)
+    exact_palette = (
+        extract_svg_palette(svg_path.read_text(encoding="utf-8")) if snap == "exact" else None
+    )
 
     tmp_html = output_dir / "_svg2frames_tmp.html"
     tmp_html.write_text(html_content, encoding="utf-8")
@@ -305,7 +346,7 @@ def render_frames(
             container.screenshot(path=str(out_path), omit_background=omit)
 
             # Snap anti-aliased pixels to nearest palette color (pixel art cleanup)
-            snap_pixel_art(out_path)
+            snap_pixel_art(out_path, palette=exact_palette)
 
             saved.append(out_path)
             print(f"  Saved {frame_name}  (t={ts:.3f}s)")
@@ -342,6 +383,13 @@ def main():
         default="transparent",
         help="Background color or 'transparent' (default: transparent)",
     )
+    parser.add_argument(
+        "--snap",
+        choices=("quantized", "exact"),
+        default="quantized",
+        help="Colour snapping: 'quantized' keeps the legacy 12-colour clustering (default); "
+        "'exact' snaps only to the colours written in the SVG source",
+    )
     args = parser.parse_args()
 
     ensure_playwright()
@@ -375,6 +423,7 @@ def main():
         duration=duration,
         scale=args.scale,
         background=args.background,
+        snap=args.snap,
     )
 
     print()
