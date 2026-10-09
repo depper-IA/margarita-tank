@@ -69,6 +69,16 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define USAGE_HIGH_COLOR   0xe0533f   /* > 90%  : red              */
 #define USAGE_TEXT_COLOR   0xf0f2f5   /* near-white for legibility */
 #define USAGE_SEP_COLOR    0x3a3f4b
+#define TOPBAR_PAD         6     /* left/right inset of the bar contents        */
+#define TOPBAR_ROW0_Y      1     /* top of row 1 inside the strip               */
+#define TOPBAR_ROW_H       ((TOPBAR_H - 2) / 2)   /* height of each row         */
+
+/* ---------- HUD overlay (subagent counter + overflow badge) ---------- */
+#define HUD_W              80    /* subagent counter canvas (2x crab + "xNNN")  */
+#define HUD_H              16
+#define HUD_BADGE_W        48    /* overflow / total badge canvas               */
+#define HUD_BADGE_H        12
+#define HUD_BAR_MARGIN     8     /* gap between the "100%" column and the HUD   */
 
 /* ---------- Day/night cycle ---------- */
 /* Time is expressed in minutes-since-midnight (hour*60 + minute) so the whole
@@ -458,6 +468,8 @@ struct scene_t {
     lv_obj_t *hud_badge_canvas;  /* canvas for overflow/total badge (right of screen) */
     uint8_t hud_subagent_count;
     uint8_t hud_overflow;
+    char hud_badge_text[16];     /* "+N" / "xN" currently shown in the badge */
+    int hud_bar_x;               /* HUD x inside the top bar (set by layout) */
     int mini_crab_frame;         /* current frame for mini-crab animation in HUD */
     uint32_t mini_crab_last_tick;
 };
@@ -759,7 +771,7 @@ scene_t *scene_create(lv_obj_t *parent)
     s->usage_sess_name = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->usage_sess_name, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->usage_sess_name, lv_color_hex(USAGE_TEXT_COLOR), 0);
-    lv_label_set_text(s->usage_sess_name, "SESSION");
+    lv_label_set_text(s->usage_sess_name, "5 HORAS");
     lv_obj_add_flag(s->usage_sess_name, LV_OBJ_FLAG_HIDDEN);
 
     /* Session row: bar + % */
@@ -787,7 +799,7 @@ scene_t *scene_create(lv_obj_t *parent)
     s->usage_week_name = lv_label_create(s->topbar);
     lv_obj_set_style_text_font(s->usage_week_name, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s->usage_week_name, lv_color_hex(USAGE_TEXT_COLOR), 0);
-    lv_label_set_text(s->usage_week_name, "WEEKLY");
+    lv_label_set_text(s->usage_week_name, "SEMANA");
     lv_obj_add_flag(s->usage_week_name, LV_OBJ_FLAG_HIDDEN);
 
     /* Weekly row: bar + % */
@@ -834,8 +846,8 @@ scene_t *scene_create(lv_obj_t *parent)
 
     /* HUD: subagent counter canvas (top-left) — sized for 2x mini-crab (20x14) + text */
     s->hud_canvas = lv_canvas_create(s->container);
-    static uint8_t hud_buf[80 * 16 * 4];
-    lv_canvas_set_buffer(s->hud_canvas, hud_buf, 80, 16, LV_COLOR_FORMAT_ARGB8888);
+    static uint8_t hud_buf[HUD_W * HUD_H * 4];
+    lv_canvas_set_buffer(s->hud_canvas, hud_buf, HUD_W, HUD_H, LV_COLOR_FORMAT_ARGB8888);
     lv_obj_align(s->hud_canvas, LV_ALIGN_TOP_LEFT, 4, 2);
     lv_obj_add_flag(s->hud_canvas, LV_OBJ_FLAG_HIDDEN);
 
@@ -843,13 +855,16 @@ scene_t *scene_create(lv_obj_t *parent)
     lv_obj_set_scrollbar_mode(lv_screen_active(), LV_SCROLLBAR_MODE_OFF);
     lv_obj_clear_flag(lv_screen_active(), LV_OBJ_FLAG_SCROLLABLE);
     s->hud_badge_canvas = lv_canvas_create(lv_screen_active());
-    static uint8_t badge_buf[48 * 12 * 4];
-    lv_canvas_set_buffer(s->hud_badge_canvas, badge_buf, 48, 12, LV_COLOR_FORMAT_ARGB8888);
+    static uint8_t badge_buf[HUD_BADGE_W * HUD_BADGE_H * 4];
+    lv_canvas_set_buffer(s->hud_badge_canvas, badge_buf, HUD_BADGE_W, HUD_BADGE_H,
+                         LV_COLOR_FORMAT_ARGB8888);
     lv_obj_align(s->hud_badge_canvas, LV_ALIGN_TOP_RIGHT, -1, 4);
     lv_obj_add_flag(s->hud_badge_canvas, LV_OBJ_FLAG_HIDDEN);
 
     s->hud_subagent_count = 0;
     s->hud_overflow = 0;
+    s->hud_badge_text[0] = '\0';
+    s->hud_bar_x = TOPBAR_PAD;
     s->mini_crab_frame = 0;
     s->mini_crab_last_tick = 0;
 
@@ -1225,7 +1240,7 @@ void scene_set_time_visible(scene_t *scene, bool visible)
         /* Hide the whole wrapper — cheapest way to remove the entire top bar. */
         lv_obj_add_flag(scene->topbar, LV_OBJ_FLAG_HIDDEN);
     }
-    scene_place_hud(scene);   /* HUD goes below the bar only while it shows */
+    scene_place_hud(scene);   /* HUD moves into the bar only while it shows */
 }
 
 /* Single-row status bar (like the PC widget): a dark strip across the top with
@@ -1255,9 +1270,11 @@ static void label_text_size(lv_obj_t *label, const lv_font_t *font,
 }
 
 /* Two-row status bar (better legibility on the 320x172 hardware):
- *   Row 1:  SESSION [====] 37%              7:30 AM
- *   Row 2:  WEEKLY  [====] 61%              RST 54m
+ *   Row 1:  5 HORAS [====] 37%   <crab>x2   7:30 AM
+ *   Row 2:  SEMANA  [====] 61%   +1        (R) 54m
  * Left block = captions + bars + %, right block = clock (row1) / reset (row2).
+ * The middle gap hosts the HUD (subagent counter / overflow badge); its x is
+ * stored in hud_bar_x for scene_place_hud().
  * No lv_obj_update_layout() calls — all sizes are measured with
  * lv_text_get_size() so this is cheap enough to run every frame. */
 static void scene_layout_topbar(scene_t *scene)
@@ -1275,16 +1292,19 @@ static void scene_layout_topbar(scene_t *scene)
     int32_t cw, ch;
     label_text_size(scene->time_label, f_clk, &cw, &ch);
 
-    /* Clock alone (no usage yet): center it on the strip. */
+    /* Clock alone (no usage yet): center it on the strip. The HUD then sits
+     * in the empty left half. */
     if (!has_usage) {
         topbar_put(scene->time_label, (cont_w - cw) / 2, (TOPBAR_H - ch) / 2);
+        scene->hud_bar_x = TOPBAR_PAD;
+        scene_place_hud(scene);
         return;
     }
 
-    const int pad = 6;
+    const int pad = TOPBAR_PAD;
     const int gap = 4;   /* caption -> bar -> % within a group */
-    const int row_h = (TOPBAR_H - 2) / 2;
-    const int row0_y = 1;
+    const int row_h = TOPBAR_ROW_H;
+    const int row0_y = TOPBAR_ROW0_Y;
     const int row1_y = row0_y + row_h;
 
     int32_t sname_w, wname_w, spct_w, wpct_w, reset_w, lh;
@@ -1321,6 +1341,13 @@ static void scene_layout_topbar(scene_t *scene)
     if (clock_y < 0) clock_y = 0;
     topbar_put(scene->time_label, cont_w - cw - pad, clock_y);
     topbar_put(scene->usage_reset_lbl, cont_w - reset_w - pad, lbl_y1);
+
+    /* HUD column: right of the widest possible percentage ("100%") so it
+     * never jitters or overlaps as the numbers change. */
+    lv_point_t pct_max;
+    lv_text_get_size(&pct_max, "100%", f_lbl, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    scene->hud_bar_x = pct_x + pct_max.x + HUD_BAR_MARGIN;
+    scene_place_hud(scene);
 }
 
 /* Bar color escalates as the bar fills: green -> lime -> yellow -> orange ->
@@ -1416,11 +1443,11 @@ void scene_update_usage(scene_t *scene, int session_pct, int weekly_pct,
         int h = reset_seconds / 3600;
         int m = (reset_seconds % 3600) / 60;
         if (h > 0)
-            lv_label_set_text_fmt(scene->usage_reset_lbl, "RST %dh%02dm", h, m);
+            lv_label_set_text_fmt(scene->usage_reset_lbl, LV_SYMBOL_REFRESH " %dh%02dm", h, m);
         else
-            lv_label_set_text_fmt(scene->usage_reset_lbl, "RST %dm", m);
+            lv_label_set_text_fmt(scene->usage_reset_lbl, LV_SYMBOL_REFRESH " %dm", m);
     } else {
-        lv_label_set_text(scene->usage_reset_lbl, "RST --");
+        lv_label_set_text(scene->usage_reset_lbl, LV_SYMBOL_REFRESH " --");
     }
 
     /* Reveal only when the top bar is currently shown. */
@@ -1646,21 +1673,44 @@ static void hud_blit_mini_crab(lv_obj_t *canvas, int frame_idx, int dx, int dy, 
     }
 }
 
-/* Place the HUD canvases: below the top bar while it is shown (it is a
- * near-opaque strip that would cover them), at the top edge otherwise.
- * Also raises the subagent counter above sprites created after it. */
+/* Draw the badge text: right-aligned so it hugs the container edge, or
+ * left-aligned so "+N" lines up under the subagent counter in the top bar. */
+static void hud_draw_badge(scene_t *s, bool left_align)
+{
+    lv_canvas_fill_bg(s->hud_badge_canvas, lv_color_hex(0x000000), LV_OPA_TRANSP);
+    int text_w = (int)strlen(s->hud_badge_text) * 6 * 2;  /* chars * (5+1 gap) * px_size */
+    int x = left_align ? 0 : HUD_BADGE_W - text_w;
+    pixel_font_draw(s->hud_badge_canvas, s->hud_badge_text, x, 1, 2, lv_color_hex(0x8BC6FC));
+}
+
+/* Place the HUD canvases. While the top bar shows, both go into its empty
+ * middle gap (counter on row 1, badge on row 2, vertically centred, drawn
+ * above the strip). Otherwise the counter sits at the scene's top-left and the
+ * badge at the container's right edge. Also raises the subagent counter above
+ * sprites (and the bar) created after it. */
 static void scene_place_hud(scene_t *s)
 {
     bool bar_shown = s->topbar && !lv_obj_has_flag(s->topbar, LV_OBJ_FLAG_HIDDEN);
-    int y_off = bar_shown ? TOPBAR_H : 0;
 
-    lv_obj_align(s->hud_canvas, LV_ALIGN_TOP_LEFT, 4, 2 + y_off);
+    if (bar_shown) {
+        /* The bar is only shown at full width, where the container starts at
+         * screen x 0, so container and screen coordinates coincide. */
+        int row1_y = TOPBAR_ROW0_Y + TOPBAR_ROW_H;
+        lv_obj_align(s->hud_canvas, LV_ALIGN_TOP_LEFT, s->hud_bar_x,
+                     TOPBAR_ROW0_Y + (TOPBAR_ROW_H - HUD_H) / 2);
+        lv_obj_align(s->hud_badge_canvas, LV_ALIGN_TOP_LEFT, s->hud_bar_x,
+                     row1_y + (TOPBAR_ROW_H - HUD_BADGE_H) / 2);
+    } else {
+        lv_obj_align(s->hud_canvas, LV_ALIGN_TOP_LEFT, 4, 2);
+        /* Badge is a screen child: a negative x-offset from the screen's right
+         * edge puts it at the container's right edge. */
+        lv_obj_align(s->hud_badge_canvas, LV_ALIGN_TOP_RIGHT,
+                     -(320 - s->target_width) - 1, 4);
+    }
     lv_obj_move_foreground(s->hud_canvas);
 
-    /* Badge sits at the right edge of the scene area (screen child, so use a
-     * negative x-offset from the screen's right edge). */
-    int x_from_right = -(320 - s->target_width) - 1;
-    lv_obj_align(s->hud_badge_canvas, LV_ALIGN_TOP_RIGHT, x_from_right, 4 + y_off);
+    if (s->hud_badge_text[0])
+        hud_draw_badge(s, bar_shown);
 }
 
 static void scene_update_hud(scene_t *s, uint8_t subagent_count, uint8_t overflow, int total_sessions) {
@@ -1683,23 +1733,18 @@ static void scene_update_hud(scene_t *s, uint8_t subagent_count, uint8_t overflo
     /* --- Overflow/total badge (right canvas, follows container edge) --- */
     bool show_badge = s->narrow ? (total_sessions > 1) : (overflow > 0);
     if (show_badge) {
-        lv_canvas_fill_bg(s->hud_badge_canvas, lv_color_hex(0x000000), LV_OPA_TRANSP);
-        char buf[16];
         if (s->narrow && total_sessions > 1) {
-            snprintf(buf, sizeof(buf), "x%d", total_sessions);
+            snprintf(s->hud_badge_text, sizeof(s->hud_badge_text), "x%d", total_sessions);
         } else {
-            snprintf(buf, sizeof(buf), "+%d", overflow);
+            snprintf(s->hud_badge_text, sizeof(s->hud_badge_text), "+%d", overflow);
         }
-        int text_w = (int)strlen(buf) * 6 * 2;  /* chars * (5+1 gap) * px_size */
-        pixel_font_draw(s->hud_badge_canvas, buf, 48 - text_w, 1, 2, lv_color_hex(0x8BC6FC));
         lv_obj_clear_flag(s->hud_badge_canvas, LV_OBJ_FLAG_HIDDEN);
     } else {
+        s->hud_badge_text[0] = '\0';
         lv_obj_add_flag(s->hud_badge_canvas, LV_OBJ_FLAG_HIDDEN);
     }
 
-    scene_place_hud(s);
-
-    lv_obj_clear_flag(s->hud_canvas, LV_OBJ_FLAG_HIDDEN);
+    scene_place_hud(s);   /* positions both canvases and draws the badge */
 }
 
 void scene_set_sessions(scene_t *s, const uint8_t *anims, const uint16_t *ids,

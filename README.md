@@ -56,7 +56,7 @@ Ambos instaladores incluyen la app de la barra de menú / bandeja con el simulad
 <img src="assets/readme/preview-sesiones.png" alt="Dos sesiones de Claude Code activas, con la barra de uso de sesión y semanal en la parte superior"><br>
 <b>Varias sesiones + barra de uso</b><br>
 Un Clawd por sesión, cada uno con su animación, y el consumo de tokens siempre visible arriba.<br>
-<code>SESSION 5h · WEEKLY 7d · reset · reloj</code>
+<code>5 HORAS · SEMANA · ⟳ reinicio · reloj</code>
 </td>
 <td width="50%" valign="top">
 <img src="assets/readme/preview-notificacion.png" alt="Tarjeta de notificación en español junto a Clawd"><br>
