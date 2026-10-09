@@ -751,11 +751,11 @@ async def test_v2_transport_gets_set_sessions():
 
 
 @pytest.mark.asyncio
-async def test_sim_transport_auto_sets_v2():
-    """Simulator transport auto-sets to v2 on connect."""
+async def test_sim_transport_auto_sets_v3():
+    """Simulator transport auto-sets to v3 on connect."""
     d = make_daemon()
     d._on_transport_connect("sim")
-    assert d._transport_versions.get("sim") == 2
+    assert d._transport_versions.get("sim") == 3
 
 
 @pytest.mark.asyncio
@@ -1254,7 +1254,7 @@ async def test_usage_crossing_threshold_rebroadcasts_display_state():
     d = make_daemon()
     transport = MockTransport(name="sim")
     d._transports["sim"] = transport
-    d._transport_versions["sim"] = 2
+    d._transport_versions["sim"] = 3
     _add_session(d, "s1", {"state": "idle", "last_event": time.time()})
     d._last_display_state = d._compute_display_state()
 
@@ -1277,12 +1277,12 @@ async def test_usage_crossing_threshold_rebroadcasts_display_state():
 
 
 @pytest.mark.asyncio
-async def test_subagent_stop_sends_happy_then_real_state_v2():
+async def test_subagent_stop_sends_happy_then_real_state_v3():
     d = make_daemon()
     transport = MockTransport(name="sim")
     d._transports["sim"] = transport
     d._transport_queues["sim"] = asyncio.Queue()
-    d._transport_versions["sim"] = 2
+    d._transport_versions["sim"] = 3
     await d._handle_message({"event": "session_start", "session_id": "aaa"})
     await d._handle_message({"event": "tool_use", "session_id": "aaa", "tool_name": "Bash"})
     await d._handle_message({"event": "session_start", "session_id": "bbb"})
@@ -1325,7 +1325,7 @@ async def test_subagent_stop_for_unknown_agent_sends_no_happy():
     transport = MockTransport(name="sim")
     d._transports["sim"] = transport
     d._transport_queues["sim"] = asyncio.Queue()
-    d._transport_versions["sim"] = 2
+    d._transport_versions["sim"] = 3
     await d._handle_message({"event": "session_start", "session_id": "s1"})
     transport.written.clear()
 
@@ -1341,7 +1341,7 @@ async def test_subagent_stop_for_hidden_session_sends_no_happy():
     transport = MockTransport(name="sim")
     d._transports["sim"] = transport
     d._transport_queues["sim"] = asyncio.Queue()
-    d._transport_versions["sim"] = 2
+    d._transport_versions["sim"] = 3
     for sid in ("s1", "s2", "s3", "s4", "s5"):
         await d._handle_message({"event": "session_start", "session_id": sid})
     await d._handle_message({"event": "subagent_start", "session_id": "s5", "agent_id": "a1"})
@@ -1752,12 +1752,12 @@ def test_liveness_persists_after_eviction(tmp_path):
 # --- Stop (end of turn) → no notification card, happy oneshot instead ---
 
 
-def _v2_daemon():
+def _v3_daemon():
     d = make_daemon()
     transport = MockTransport(name="sim")
     d._transports["sim"] = transport
     d._transport_queues["sim"] = asyncio.Queue()
-    d._transport_versions["sim"] = 2
+    d._transport_versions["sim"] = 3
     return d, transport
 
 
@@ -1769,7 +1769,7 @@ STOP_MSG = {"event": "add", "hook": "Stop", "session_id": "aaa",
 async def test_stop_adds_no_notification_card():
     """End of turn is not something the user must act on: no card is stored or
     forwarded to the device."""
-    d, _ = _v2_daemon()
+    d, _ = _v3_daemon()
     await d._handle_message({"event": "session_start", "session_id": "aaa"})
     for q in d._transport_queues.values():
         while not q.empty():
@@ -1784,8 +1784,8 @@ async def test_stop_adds_no_notification_card():
 
 
 @pytest.mark.asyncio
-async def test_stop_plays_happy_then_idle_v2():
-    d, transport = _v2_daemon()
+async def test_stop_plays_happy_then_idle_v3():
+    d, transport = _v3_daemon()
     await d._handle_message({"event": "session_start", "session_id": "aaa"})
     await d._handle_message({"event": "tool_use", "session_id": "aaa", "tool_name": "Bash"})
     transport.written.clear()
@@ -1799,7 +1799,7 @@ async def test_stop_plays_happy_then_idle_v2():
 
 @pytest.mark.asyncio
 async def test_stop_with_running_subagents_returns_to_conducting():
-    d, transport = _v2_daemon()
+    d, transport = _v3_daemon()
     await d._handle_message({"event": "session_start", "session_id": "aaa"})
     await d._handle_message({"event": "subagent_start", "session_id": "aaa", "agent_id": "a1"})
     transport.written.clear()
@@ -1816,7 +1816,7 @@ async def test_stop_with_running_subagents_returns_to_conducting():
 async def test_other_cards_still_shown():
     """Permission-free attention signals keep their card: API errors and the
     idle_prompt notification."""
-    d, _ = _v2_daemon()
+    d, _ = _v3_daemon()
     await d._handle_message({"event": "add", "hook": "StopFailure", "session_id": "aaa",
                              "project": "p", "message": "Error de API"})
     await d._handle_message({"event": "add", "hook": "Notification", "session_id": "bbb",

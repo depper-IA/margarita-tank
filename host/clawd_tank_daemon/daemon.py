@@ -52,6 +52,34 @@ WEB_TOOLS = frozenset({"WebSearch", "WebFetch"})
 # percentage: little headroom is left before the rate limit.
 LOW_BATTERY_USAGE_PCT = 90
 
+# Protocol v3 firmware accepts these animations in set_sessions. v2 firmware's
+# parser returns -1 for a name it doesn't know and drops that slot, so the crab
+# vanishes; for those transports the names are swapped for the closest
+# animation v2 knows. "happy" as a oneshot is skipped instead (see
+# _send_session_oneshot); the mapping only covers it in a regular state.
+MIN_PROTOCOL_FOR_PHASE1_ANIMS = 3
+PHASE1_ANIM_FALLBACKS = {
+    "low_battery": "idle",
+    "hat_mishap": "confused",
+    "happy": "idle",
+}
+
+# The simulator compiles the same firmware sources, so it speaks the latest
+# protocol. It has no version characteristic to read.
+SIM_PROTOCOL_VERSION = 3
+
+
+def downgrade_display_state(state: dict, version: int) -> dict:
+    """Return `state` with the animation names a `version` transport understands.
+
+    The input is never mutated (other transports may still need the original
+    names); a status-only state, or a transport at MIN_PROTOCOL_FOR_PHASE1_ANIMS
+    or newer, gets `state` back unchanged."""
+    if version >= MIN_PROTOCOL_FOR_PHASE1_ANIMS or "anims" not in state:
+        return state
+    anims = [PHASE1_ANIM_FALLBACKS.get(a, a) for a in state["anims"]]
+    return {**state, "anims": anims}
+
 
 def _tool_to_anim(tool_name: str) -> str:
     if tool_name and tool_name.startswith("mcp__"):
@@ -324,7 +352,7 @@ class ClawdDaemon:
                                 if idx is not None:
                                     sweeping_state["anims"][idx] = "sweeping"
                                 break
-                    payload = display_state_to_ble_payload(sweeping_state)
+                    payload = self._set_sessions_payload_for(name, sweeping_state)
                     await transport.write_notification(payload)
                     # No second fallback for v2 — firmware handles sweeping as oneshot
                 else:
@@ -416,8 +444,10 @@ class ClawdDaemon:
 
     async def _send_session_oneshot(self, session_id: str, anim: str) -> bool:
         """Send a set_sessions with session_id's slot showing a oneshot `anim` to
-        every connected v2 transport. v1 transports have no per-session slots and
-        are skipped. Returns False when the session has no visible slot."""
+        every connected v2+ transport. v1 transports have no per-session slots and
+        are skipped, as are transports too old to know `anim` (a v2 firmware
+        would drop the slot). Returns False when the session has no visible
+        slot or no transport got the oneshot."""
         state = self._compute_display_state()
         if "anims" not in state:
             return False
@@ -425,14 +455,25 @@ class ClawdDaemon:
         if did is None or did not in state["ids"]:
             return False
         state["anims"][state["ids"].index(did)] = anim
-        payload = display_state_to_ble_payload(state)
         sent = False
         for name, transport in self._transports.items():
-            if transport.is_connected and self._transport_versions.get(name, 1) >= 2:
-                logger.info("Display oneshot: %s on session %s", anim, session_id[:12])
-                await transport.write_notification(payload)
-                sent = True
+            if not transport.is_connected:
+                continue
+            version = self._transport_versions.get(name, 1)
+            if version < 2:
+                continue
+            if version < MIN_PROTOCOL_FOR_PHASE1_ANIMS and anim in PHASE1_ANIM_FALLBACKS:
+                continue
+            logger.info("Display oneshot: %s on session %s", anim, session_id[:12])
+            await transport.write_notification(self._set_sessions_payload_for(name, state))
+            sent = True
         return sent
+
+    def _set_sessions_payload_for(self, name: str, state: dict) -> str:
+        """set_sessions payload for a v2+ transport, with any animation name its
+        protocol version does not know swapped for a fallback."""
+        version = self._transport_versions.get(name, 1)
+        return display_state_to_ble_payload(downgrade_display_state(state, version))
 
     def _enter_state(
         self, session_id: str, state: str, tool_name: str, now: float, *, create: bool,
@@ -606,7 +647,7 @@ class ClawdDaemon:
             if transport.is_connected:
                 version = self._transport_versions.get(name, 1)
                 if version >= 2:
-                    payload = display_state_to_ble_payload(new_state)
+                    payload = self._set_sessions_payload_for(name, new_state)
                 else:
                     payload = display_state_to_v1_payload(new_state)
                 await transport.write_notification(payload)
@@ -729,7 +770,7 @@ class ClawdDaemon:
         logger.info("Transport '%s' connected", name)
         # Simulator always supports latest protocol; BLE defaults to v1
         if name.startswith("sim"):
-            self._transport_versions[name] = 2
+            self._transport_versions[name] = SIM_PROTOCOL_VERSION
         if self._observer:
             self._observer.on_connection_change(True, name)
 
@@ -790,7 +831,7 @@ class ClawdDaemon:
         self._last_display_state = state
         version = self._transport_versions.get(name, 1)
         if version >= 2:
-            status_payload = display_state_to_ble_payload(state)
+            status_payload = self._set_sessions_payload_for(name, state)
         else:
             status_payload = display_state_to_v1_payload(state)
         await transport.write_notification(status_payload)

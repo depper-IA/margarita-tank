@@ -291,7 +291,14 @@ static int config_access_cb(uint16_t conn_handle, uint16_t attr_handle,
 static int version_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                               struct ble_gatt_access_ctxt *ctxt, void *arg) {
     if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
-        const char *ver = "2";
+        /* Protocol version read by the host daemon on connect.
+         *   v1: set_status only (single aggregated animation).
+         *   v2: set_sessions with per-session animations and ids.
+         *   v3: same as v2, and set_sessions also accepts "happy",
+         *       "low_battery" and "hat_mishap". A v2 firmware drops a slot whose
+         *       animation it doesn't know, so the daemon downgrades those names
+         *       for v2 devices. */
+        const char *ver = "3";
         int rc = os_mbuf_append(ctxt->om, ver, strlen(ver));
         return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     }

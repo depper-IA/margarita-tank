@@ -38,8 +38,11 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
   instead of `confused`; other tool failures stay `confused`.
 - [x] **Multi-session oneshot protection** — the multi-session `set_sessions` path no longer
   cuts a playing oneshot (matches the single-session path).
-- [ ] Flash the device and check the four animations on hardware. Old firmware drops
-  slots whose anim name it does not know, so update host and firmware together.
+- [x] **Protocol v3 gating** — firmware reports protocol version 3 (v2 + `happy`/`low_battery`/`hat_mishap` in `set_sessions`); the simulator counts as v3. For v2 transports the daemon
+  maps `low_battery`→idle, `hat_mishap`→confused and skips the `happy` oneshot
+  (`downgrade_display_state`, `MIN_PROTOCOL_FOR_PHASE1_ANIMS`), so old firmware no longer drops crabs.
+- [ ] Flash the device and check the four animations on hardware. Old (v2) firmware now gets
+  downgraded names from the daemon, so host and firmware can be updated separately.
 
 ## Windows Claude PID resolution — Complete
 
