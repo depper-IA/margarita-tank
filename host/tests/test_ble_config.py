@@ -552,3 +552,140 @@ async def test_cancelling_connect_propagates_and_cancels_inner_scan():
             await _release_abandoned(ble, release, outer)
 
     assert not ble.is_connected
+
+
+@pytest.mark.asyncio
+async def test_bleak_connect_timeout_is_logged_and_retried(caplog):
+    """bleak's own connect timeout raises TimeoutError (== asyncio.TimeoutError
+    on 3.11). It must not be mistaken for _run_bounded's timeout (which logs
+    itself): the failure has to leave a warning, then retry."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    timed_out = MagicMock()
+    timed_out.connect = AsyncMock(side_effect=TimeoutError())
+    good = MagicMock()
+    good.connect = AsyncMock()
+    good.is_connected = True
+    good.mtu_size = 256
+
+    with caplog.at_level("WARNING", logger="clawd-tank.ble"), patch(
+        "clawd_tank_daemon.ble_client.SCAN_INTERVAL_SECS", 0
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(return_value=device),
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakClient", side_effect=[timed_out, good]
+    ):
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    failures = [r for r in caplog.records if "Connection failed" in r.getMessage()]
+    assert len(failures) == 1
+    assert "timed out" in failures[0].getMessage()
+    assert ble._client is good
+
+
+@pytest.mark.asyncio
+async def test_bounded_connect_timeout_is_logged_once(caplog):
+    """_run_bounded already logs its own timeout; the connect loop must not
+    add a second "Connection failed" line for it."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    never = asyncio.Event()
+
+    async def hang():
+        await never.wait()
+
+    hung = MagicMock()
+    hung.connect = AsyncMock(side_effect=hang)
+    hung.is_connected = False
+    good = MagicMock()
+    good.connect = AsyncMock()
+    good.is_connected = True
+    good.mtu_size = 256
+
+    with caplog.at_level("WARNING", logger="clawd-tank.ble"), patch(
+        "clawd_tank_daemon.ble_client.CONNECT_HARD_TIMEOUT_SECS", 0.05
+    ), patch(
+        "clawd_tank_daemon.ble_client.SCAN_INTERVAL_SECS", 0
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(return_value=device),
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakClient", side_effect=[hung, good]
+    ):
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert sum("did not finish within" in m for m in messages) == 1
+    assert not any("Connection failed" in m for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_abandoned_connect_that_succeeds_later_is_disconnected(caplog):
+    """An abandoned connect() can still bring the link up once bleak's cleanup
+    finishes. The ESP32 accepts a single connection, so that stray link must
+    be torn down, while the retry's client is the one kept."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    release = asyncio.Event()
+
+    stray = MagicMock()
+    stray.is_connected = False
+    stray.disconnect = AsyncMock()
+
+    async def hang_then_connect(*args, **kwargs):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            await release.wait()  # cleanup hangs, then the link comes up
+            stray.is_connected = True
+            return True
+
+    stray.connect = AsyncMock(side_effect=hang_then_connect)
+    good = MagicMock()
+    good.connect = AsyncMock()
+    good.disconnect = AsyncMock()
+    good.is_connected = True
+    good.mtu_size = 256
+
+    ble = ClawdBleClient()
+    with caplog.at_level("WARNING", logger="clawd-tank.ble"), patch(
+        "clawd_tank_daemon.ble_client.CONNECT_HARD_TIMEOUT_SECS", 0.05
+    ), patch(
+        "clawd_tank_daemon.ble_client.SCAN_INTERVAL_SECS", 0
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(return_value=device),
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakClient", side_effect=[stray, good]
+    ):
+        await asyncio.wait_for(ble.connect(), timeout=2)
+        assert ble._client is good
+
+        release.set()
+        for _ in range(20):
+            await asyncio.sleep(0)
+            if stray.disconnect.await_count:
+                break
+        await _release_abandoned(ble, release)
+
+    stray.disconnect.assert_awaited_once()
+    good.disconnect.assert_not_awaited()
+    assert ble._client is good
+    assert any("stray" in r.getMessage().lower() for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_disconnect_callback_from_stray_client_keeps_current_link():
+    """Every BleakClient shares _on_disconnect. Tearing down a stray client
+    fires it too, which must not drop (or report as lost) the current link."""
+    calls = []
+    ble = ClawdBleClient(on_disconnect_cb=lambda: calls.append(True))
+    current = MagicMock()
+    current.is_connected = True
+    ble._client = current
+
+    ble._on_disconnect(MagicMock(name="stray"))
+    await asyncio.sleep(0)
+
+    assert ble._client is current
+    assert calls == []

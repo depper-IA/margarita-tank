@@ -35,6 +35,12 @@ GATT_OP_MAX_ATTEMPTS = 2
 GATT_OP_RETRY_DELAY_SECS = 0.3
 
 
+class _BoundedTimeout(asyncio.TimeoutError):
+    """Raised by _run_bounded when it abandons a task. It has already been
+    logged there; a plain TimeoutError (e.g. bleak's own connect timeout)
+    has not, so callers tell the two apart by type."""
+
+
 class ClawdBleClient:
     """Manages BLE connection to the Clawd Tank ESP32 device."""
 
@@ -87,7 +93,10 @@ class ClawdBleClient:
                     SCAN_HARD_TIMEOUT_SECS,
                     "BLE scan",
                 )
+            except _BoundedTimeout:
+                continue
             except asyncio.TimeoutError:
+                logger.warning("BLE scan timed out, retrying...")
                 continue
             if device is None:
                 logger.debug("%s not found, retrying...", DEVICE_NAME)
@@ -104,7 +113,12 @@ class ClawdBleClient:
                 )
                 # An abandoned attempt's client is never kept as self._client.
                 await self._run_bounded(
-                    client.connect(), CONNECT_HARD_TIMEOUT_SECS, "BLE connect"
+                    client.connect(),
+                    CONNECT_HARD_TIMEOUT_SECS,
+                    "BLE connect",
+                    on_abandoned_done=lambda task, c=client: (
+                        self._drop_stray_client(c, task)
+                    ),
                 )
                 self._client = client
                 self._disconnect_notified = False  # re-arm for this connection
@@ -112,13 +126,21 @@ class ClawdBleClient:
                 if self._on_connect_cb:
                     self._on_connect_cb()
                 return
+            except _BoundedTimeout:
+                await asyncio.sleep(SCAN_INTERVAL_SECS)
             except asyncio.TimeoutError:
+                logger.warning(
+                    "Connection failed: timed out after bleak's connect timeout, "
+                    "retrying..."
+                )
                 await asyncio.sleep(SCAN_INTERVAL_SECS)
             except Exception as e:
-                logger.warning("Connection failed: %s, retrying...", e)
+                logger.warning("Connection failed: %s, retrying...", e or repr(e))
                 await asyncio.sleep(SCAN_INTERVAL_SECS)
 
-    async def _run_bounded(self, coro, timeout: float, what: str):
+    async def _run_bounded(
+        self, coro, timeout: float, what: str, on_abandoned_done=None
+    ):
         """Run ``coro`` as a task and return its result within ``timeout``.
 
         Plain ``asyncio.wait_for`` is not enough: on timeout (or when the
@@ -129,22 +151,25 @@ class ClawdBleClient:
         abandoned instead of awaited, and asyncio.TimeoutError is raised so
         the caller can retry. If the caller itself is cancelled, the task is
         cancelled too and the CancelledError propagates.
+
+        ``on_abandoned_done(task)``, if given, is called once an abandoned
+        task finally finishes, so the caller can undo a late side effect.
         """
         task = asyncio.ensure_future(coro)
         try:
             done, _ = await asyncio.wait({task}, timeout=timeout)
         except asyncio.CancelledError:
-            self._abandon(task)
+            self._abandon(task, on_abandoned_done)
             raise
         if task in done:
             return task.result()
         logger.warning(
             "%s did not finish within %ss; abandoned it, retrying", what, timeout
         )
-        self._abandon(task)
-        raise asyncio.TimeoutError(f"{what} timed out after {timeout}s")
+        self._abandon(task, on_abandoned_done)
+        raise _BoundedTimeout(f"{what} timed out after {timeout}s")
 
-    def _abandon(self, task: asyncio.Task) -> None:
+    def _abandon(self, task: asyncio.Task, on_done=None) -> None:
         """Cancel ``task`` without awaiting it, keeping it referenced until
         it finishes and retrieving its exception so asyncio does not log
         "Task exception was never retrieved"."""
@@ -153,6 +178,8 @@ class ClawdBleClient:
             return
         self._abandoned_tasks.add(task)
         task.add_done_callback(self._on_abandoned_done)
+        if on_done is not None:
+            task.add_done_callback(on_done)
 
     def _on_abandoned_done(self, task: asyncio.Task) -> None:
         self._abandoned_tasks.discard(task)
@@ -161,8 +188,39 @@ class ClawdBleClient:
             if exc is not None:
                 logger.debug("Abandoned BLE task finished with: %s", exc)
 
+    def _drop_stray_client(self, client: BleakClient, task: asyncio.Task) -> None:
+        """Disconnect a client whose abandoned connect() came up anyway.
+
+        bleak's cleanup can let an abandoned attempt finish and bring the
+        link up. The daemon never tracks that client, and the ESP32 accepts
+        a single connection, so the stray link would block every retry.
+        """
+        if client is self._client:
+            return
+        succeeded = not task.cancelled() and task.exception() is None
+        if not (succeeded or client.is_connected):
+            return
+        logger.warning(
+            "Abandoned BLE connect came up later; disconnecting the stray link"
+        )
+        cleanup = asyncio.ensure_future(self._disconnect_stray(client))
+        self._abandoned_tasks.add(cleanup)
+        cleanup.add_done_callback(self._abandoned_tasks.discard)
+
+    @staticmethod
+    async def _disconnect_stray(client: BleakClient) -> None:
+        try:
+            await client.disconnect()
+        except Exception as e:
+            logger.debug("Stray BLE client disconnect failed: %s", e)
+
     def _on_disconnect(self, client: BleakClient) -> None:
         """Handle disconnect — may be called from a non-event-loop thread."""
+        if self._client is not None and client is not self._client:
+            # A stray client (e.g. an abandoned connect torn down by
+            # _drop_stray_client) must not drop the current link.
+            logger.debug("Ignoring disconnect of a stale BLE client")
+            return
         logger.warning("Disconnected from %s", DEVICE_NAME)
         if self._loop is not None and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._clear_client)
