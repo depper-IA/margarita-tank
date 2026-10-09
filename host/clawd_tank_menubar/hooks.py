@@ -348,7 +348,9 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
     # STATUSLINE_BRIDGE_VERSION: 1
 
     import json
+    import ntpath
     import os
+    import shutil
     import subprocess
     import sys
     import tempfile
@@ -358,6 +360,7 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
     CACHE_PATH = CLAWD_DIR / "statusline-cache.json"
     STATE_PATH = CLAWD_DIR / "statusline-original.json"
     GUARD_ENV = "CLAWD_TANK_STATUSLINE_BRIDGE"
+    GIT_BASH_ENV = "CLAUDE_CODE_GIT_BASH_PATH"
     CHAIN_TIMEOUT_S = 10
 
 
@@ -390,13 +393,54 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
             return None
 
 
+    def find_git_bash(environ, which, isfile):
+        """The Git Bash that Claude Code runs statusLine commands through on Windows:
+        the one named by CLAUDE_CODE_GIT_BASH_PATH, else the bash.exe that ships
+        with the git on PATH (git.exe sits in the cmd, mingw64/bin or bin folder of
+        the Git for Windows install, whose bash.exe is in its bin folder). Never a
+        bash found on PATH itself: System32/bash.exe is the WSL launcher and would
+        run the command in Linux. None when there is no Git Bash."""
+        configured = environ.get(GIT_BASH_ENV)
+        if configured and isfile(configured):
+            return configured
+        git = which("git")
+        if not git:
+            return None
+        git_dir = ntpath.dirname(git)
+        for up in ((), ("..",), ("..", "..")):
+            parts = up + ("bin",) if up else ()
+            candidate = ntpath.normpath(ntpath.join(git_dir, *parts, "bash.exe"))
+            if isfile(candidate):
+                return candidate
+        return None
+
+
+    def chain_invocation(command, platform=None, environ=None, which=None, isfile=None):
+        """(args, shell) for subprocess.run to chain `command` through.
+
+        The user's original was written for the shell Claude Code runs it with. On
+        Windows that is Git Bash, not cmd.exe, so use it ([bash, "-c", command]);
+        cmd.exe (shell=True) is only the fallback when no Git Bash is found.
+        Elsewhere shell=True is /bin/sh, which is what Claude Code uses too."""
+        if (sys.platform if platform is None else platform) == "win32":
+            bash = find_git_bash(
+                os.environ if environ is None else environ,
+                shutil.which if which is None else which,
+                os.path.isfile if isfile is None else isfile,
+            )
+            if bash:
+                return [bash, "-c", command], False
+        return command, True
+
+
     def chain(command, raw):
         # A bridge that finds itself as the "original" would fork forever.
         if os.environ.get(GUARD_ENV):
             return
         try:
+            args, shell = chain_invocation(command)
             proc = subprocess.run(
-                command, shell=True, input=raw, stdout=subprocess.PIPE,
+                args, shell=shell, input=raw, stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, timeout=CHAIN_TIMEOUT_S,
                 env={**os.environ, GUARD_ENV: "1"},
             )

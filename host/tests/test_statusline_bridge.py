@@ -370,3 +370,93 @@ def test_sh_bridge_falls_back_to_the_default_timeout_for_a_bad_value(sh_bridge, 
         env={"CLAWD_TANK_STATUSLINE_TIMEOUT": bad},
     )
     assert proc.stdout == b"fine\n"
+
+
+# --- which shell the Python bridge chains the original through ----------------
+#
+# Claude Code on Windows runs statusLine commands through Git Bash, so the user's
+# original (written for bash: `~/.claude/statusline.sh`, `$HOME`, forward-slash
+# paths) must go through the same bash. cmd.exe, the plain shell=True, is only
+# the fallback. The selection takes the platform and environment as arguments so
+# it can be checked here, where Windows is not available.
+
+GIT_BASH = "C:\\Program Files\\Git\\bin\\bash.exe"
+GIT_CMD_EXE = "C:\\Program Files\\Git\\cmd\\git.exe"
+WSL_LAUNCHER = "C:\\Windows\\System32\\bash.exe"
+
+
+def test_python_bridge_script_compiles_without_warnings():
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # e.g. an invalid escape in a docstring
+        compile(hooks.STATUSLINE_BRIDGE_SCRIPT, "statusline_bridge.py", "exec")
+
+
+@pytest.fixture(scope="module")
+def bridge_module():
+    namespace = {"__name__": "statusline_bridge_under_test"}
+    exec(compile(hooks.STATUSLINE_BRIDGE_SCRIPT, "statusline_bridge.py", "exec"), namespace)
+    return namespace
+
+
+def _invocation(module, platform, *, env=None, existing=(), git=None, command="orig --x"):
+    """(chain_invocation result, names looked up on PATH)."""
+    looked_up = []
+
+    def which(name):
+        looked_up.append(name)
+        return git if name == "git" else WSL_LAUNCHER  # a bash on PATH would be WSL's
+
+    result = module["chain_invocation"](
+        command, platform, env or {}, which, lambda path: path in existing)
+    return result, looked_up
+
+
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_posix_keeps_chaining_through_the_default_shell(bridge_module, platform):
+    result, looked_up = _invocation(
+        bridge_module, platform, env={"CLAUDE_CODE_GIT_BASH_PATH": GIT_BASH},
+        existing={GIT_BASH}, git=GIT_CMD_EXE)
+    assert result == ("orig --x", True)
+    assert looked_up == []
+
+
+def test_windows_uses_the_git_bash_claude_code_was_told_to_use(bridge_module):
+    custom = "D:\\tools\\git\\bin\\bash.exe"
+    result, _ = _invocation(
+        bridge_module, "win32", env={"CLAUDE_CODE_GIT_BASH_PATH": custom},
+        existing={custom, GIT_BASH}, git=GIT_CMD_EXE)
+    assert result == ([custom, "-c", "orig --x"], False)
+
+
+def test_windows_ignores_a_configured_bash_that_is_not_there(bridge_module):
+    result, _ = _invocation(
+        bridge_module, "win32", env={"CLAUDE_CODE_GIT_BASH_PATH": "D:\\gone\\bash.exe"},
+        existing={GIT_BASH}, git=GIT_CMD_EXE)
+    assert result == ([GIT_BASH, "-c", "orig --x"], False)
+
+
+@pytest.mark.parametrize("git, bash", [
+    # the default Git for Windows layout: git.exe in cmd\, bash.exe in bin\
+    (GIT_CMD_EXE, GIT_BASH),
+    # git.exe from mingw64\bin: bash is two folders up, in bin\
+    ("C:\\Program Files\\Git\\mingw64\\bin\\git.exe", GIT_BASH),
+    # a portable layout with both side by side
+    ("D:\\PortableGit\\bin\\git.exe", "D:\\PortableGit\\bin\\bash.exe"),
+])
+def test_windows_finds_the_bash_that_ships_next_to_git(bridge_module, git, bash):
+    result, _ = _invocation(bridge_module, "win32", existing={bash}, git=git)
+    assert result == ([bash, "-c", "orig --x"], False)
+
+
+def test_windows_never_takes_a_bash_off_the_path(bridge_module):
+    # System32\bash.exe is the WSL launcher: it would run the command in Linux.
+    result, looked_up = _invocation(
+        bridge_module, "win32", existing={WSL_LAUNCHER}, git=GIT_CMD_EXE)
+    assert result == ("orig --x", True)
+    assert looked_up == ["git"]
+
+
+def test_windows_without_git_or_bash_falls_back_to_the_default_shell(bridge_module):
+    assert _invocation(bridge_module, "win32")[0] == ("orig --x", True)
+    assert _invocation(bridge_module, "win32", git=GIT_CMD_EXE)[0] == ("orig --x", True)
