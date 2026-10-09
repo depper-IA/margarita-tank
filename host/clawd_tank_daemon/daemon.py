@@ -104,6 +104,16 @@ PID_DEDUP_FRESHNESS_SECONDS = 60.0
 # never reports range/sleep disconnects, so without this probe a dead link is
 # never detected and the daemon never re-scans. Detection lag ~= this interval.
 BLE_LIVENESS_INTERVAL_SECS = 20.0
+# How often an idle transport sender checks that its link is still up (and
+# reconnects it if not). Detection lag for a dropped link ~= this interval.
+SENDER_IDLE_POLL_SECS = 1.0
+# A transport sender that crashes is restarted after base * 2**n seconds, capped
+# at the maximum; a sender that then runs for SENDER_STABLE_SECS without
+# crashing starts the back-off over. Without a restart one stray exception left
+# the transport with no sender: no automatic reconnect, queue never drained.
+SENDER_RESTART_BASE_SECS = 1.0
+SENDER_RESTART_MAX_SECS = 30.0
+SENDER_STABLE_SECS = 60.0
 # How often to check that each session's Claude Code process is still alive. A
 # window closed with the X sends no SessionEnd, so this interval is how long its
 # crab lingers. A PID check is a cheap OS call, so keep it short.
@@ -847,6 +857,36 @@ class ClawdDaemon:
         await transport.write_notification(status_payload)
 
     async def _transport_sender(self, name: str) -> None:
+        """Keep a named transport's sender running.
+
+        The sender is the only thing that connects a transport on its own and
+        drains its queue, and its task is not awaited by anyone until shutdown,
+        so an exception that escaped it used to vanish without a trace and
+        leave the transport dead until the user clicked Reconnect (which calls
+        ensure_connected() directly). Log every crash with its traceback and
+        restart the sender after a growing delay. Cancellation still ends it.
+        """
+        crashes = 0
+        while self._running:
+            started = time.monotonic()
+            try:
+                await self._run_transport_sender(name)
+                return
+            except Exception:
+                if time.monotonic() - started >= SENDER_STABLE_SECS:
+                    crashes = 0
+                crashes += 1
+                delay = min(
+                    SENDER_RESTART_MAX_SECS,
+                    SENDER_RESTART_BASE_SECS * 2 ** min(crashes - 1, 10),
+                )
+                logger.exception(
+                    "Transport '%s' sender crashed (%d in a row); restarting in %gs",
+                    name, crashes, delay,
+                )
+                await asyncio.sleep(delay)
+
+    async def _run_transport_sender(self, name: str) -> None:
         """Process pending messages and send them over a named transport."""
         transport = self._transports[name]
         queue = self._transport_queues[name]
@@ -856,7 +896,9 @@ class ClawdDaemon:
             await self._post_connect_sync(transport, name)
         while self._running:
             try:
-                msg = await asyncio.wait_for(queue.get(), timeout=1.0)
+                msg = await asyncio.wait_for(
+                    queue.get(), timeout=SENDER_IDLE_POLL_SECS
+                )
             except asyncio.TimeoutError:
                 # Proactively reconnect if transport dropped
                 if not transport.is_connected:
