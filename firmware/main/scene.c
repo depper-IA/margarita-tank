@@ -1194,6 +1194,7 @@ static void scene_apply_daylight(scene_t *scene, int hour, int minute)
 /* ---------- Time ---------- */
 
 static void scene_layout_topbar(scene_t *scene);
+static void scene_place_hud(scene_t *s);
 
 static void usage_widgets_set_hidden(scene_t *scene, bool hidden)
 {
@@ -1224,6 +1225,7 @@ void scene_set_time_visible(scene_t *scene, bool visible)
         /* Hide the whole wrapper — cheapest way to remove the entire top bar. */
         lv_obj_add_flag(scene->topbar, LV_OBJ_FLAG_HIDDEN);
     }
+    scene_place_hud(scene);   /* HUD goes below the bar only while it shows */
 }
 
 /* Single-row status bar (like the PC widget): a dark strip across the top with
@@ -1644,6 +1646,23 @@ static void hud_blit_mini_crab(lv_obj_t *canvas, int frame_idx, int dx, int dy, 
     }
 }
 
+/* Place the HUD canvases: below the top bar while it is shown (it is a
+ * near-opaque strip that would cover them), at the top edge otherwise.
+ * Also raises the subagent counter above sprites created after it. */
+static void scene_place_hud(scene_t *s)
+{
+    bool bar_shown = s->topbar && !lv_obj_has_flag(s->topbar, LV_OBJ_FLAG_HIDDEN);
+    int y_off = bar_shown ? TOPBAR_H : 0;
+
+    lv_obj_align(s->hud_canvas, LV_ALIGN_TOP_LEFT, 4, 2 + y_off);
+    lv_obj_move_foreground(s->hud_canvas);
+
+    /* Badge sits at the right edge of the scene area (screen child, so use a
+     * negative x-offset from the screen's right edge). */
+    int x_from_right = -(320 - s->target_width) - 1;
+    lv_obj_align(s->hud_badge_canvas, LV_ALIGN_TOP_RIGHT, x_from_right, 4 + y_off);
+}
+
 static void scene_update_hud(scene_t *s, uint8_t subagent_count, uint8_t overflow, int total_sessions) {
     s->hud_subagent_count = subagent_count;
     s->hud_overflow = overflow;
@@ -1673,13 +1692,12 @@ static void scene_update_hud(scene_t *s, uint8_t subagent_count, uint8_t overflo
         }
         int text_w = (int)strlen(buf) * 6 * 2;  /* chars * (5+1 gap) * px_size */
         pixel_font_draw(s->hud_badge_canvas, buf, 48 - text_w, 1, 2, lv_color_hex(0x8BC6FC));
-        /* Position at right edge of scene area: use negative x-offset from screen right */
-        int x_from_right = -(320 - s->target_width) - 1;
-        lv_obj_align(s->hud_badge_canvas, LV_ALIGN_TOP_RIGHT, x_from_right, 4);
         lv_obj_clear_flag(s->hud_badge_canvas, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(s->hud_badge_canvas, LV_OBJ_FLAG_HIDDEN);
     }
+
+    scene_place_hud(s);
 
     lv_obj_clear_flag(s->hud_canvas, LV_OBJ_FLAG_HIDDEN);
 }
