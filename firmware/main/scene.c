@@ -34,6 +34,9 @@
 #include "assets/sprite_wizard.h"
 #include "assets/sprite_conducting.h"
 #include "assets/sprite_beacon.h"
+#include "assets/sprite_wake.h"
+#include "assets/sprite_low_battery.h"
+#include "assets/sprite_hat_mishap.h"
 #include "assets/sprite_mini_crab.h"
 #include "rle_sprite.h"
 #include "pixel_font.h"
@@ -114,6 +117,9 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define WIZARD_FRAME_MS     (1000 / 8)  /* 125ms @ 8fps */
 #define CONDUCTING_FRAME_MS (1000 / 8)  /* 125ms @ 8fps */
 #define BEACON_FRAME_MS     (1000 / 8)  /* 125ms @ 8fps */
+#define WAKE_FRAME_MS       (1000 / 8)  /* 125ms @ 8fps */
+#define LOW_BATTERY_FRAME_MS (1000 / 6) /* 167ms @ 6fps */
+#define HAT_MISHAP_FRAME_MS (1000 / 6)  /* 167ms @ 6fps */
 
 /* ---------- Animation metadata ---------- */
 
@@ -308,6 +314,36 @@ static const anim_def_t anim_defs[] = {
         .width = BEACON_WIDTH,
         .height = BEACON_HEIGHT,
         .y_offset = 4,
+    },
+    [CLAWD_ANIM_WAKE] = {
+        .rle_data = wake_rle_data,
+        .frame_offsets = wake_frame_offsets,
+        .frame_count = WAKE_FRAME_COUNT,
+        .frame_ms = WAKE_FRAME_MS,
+        .looping = false,  /* oneshot — returns to the slot's fallback */
+        .width = WAKE_WIDTH,
+        .height = WAKE_HEIGHT,
+        .y_offset = -8,   /* 8 - 16 */
+    },
+    [CLAWD_ANIM_LOW_BATTERY] = {
+        .rle_data = low_battery_rle_data,
+        .frame_offsets = low_battery_frame_offsets,
+        .frame_count = LOW_BATTERY_FRAME_COUNT,
+        .frame_ms = LOW_BATTERY_FRAME_MS,
+        .looping = true,
+        .width = LOW_BATTERY_WIDTH,
+        .height = LOW_BATTERY_HEIGHT,
+        .y_offset = -8,   /* 8 - 16 */
+    },
+    [CLAWD_ANIM_HAT_MISHAP] = {
+        .rle_data = hat_mishap_rle_data,
+        .frame_offsets = hat_mishap_frame_offsets,
+        .frame_count = HAT_MISHAP_FRAME_COUNT,
+        .frame_ms = HAT_MISHAP_FRAME_MS,
+        .looping = true,
+        .width = HAT_MISHAP_WIDTH,
+        .height = HAT_MISHAP_HEIGHT,
+        .y_offset = -7,   /* 8 - 15 */
     },
     [CLAWD_ANIM_MINI_CLAWD] = {
         .rle_data = mini_crab_rle_data,
@@ -1553,6 +1589,25 @@ void scene_play_slot0_oneshot(scene_t *scene, clawd_anim_id_t anim)
     lv_obj_align(slot->sprite_img, LV_ALIGN_BOTTOM_MID, slot->x_off, def->y_offset);
 }
 
+/* True when slot 0 shows the sleeping crab (no sessions on the host). */
+bool scene_is_sleeping(scene_t *scene)
+{
+    if (!scene) return false;
+    clawd_slot_t *slot = &scene->slots[0];
+    return slot->active && slot->cur_anim == CLAWD_ANIM_SLEEPING;
+}
+
+/* Play the wake-up oneshot on slot 0, then let it return to its fallback
+ * (the session animation set just before). Skipped while slot 0 walks to a
+ * new position: the walk owns cur_anim and would fight the oneshot. */
+void scene_play_wake(scene_t *scene)
+{
+    if (!scene) return;
+    clawd_slot_t *slot = &scene->slots[0];
+    if (slot->walking_in || slot->departing) return;
+    scene_play_slot0_oneshot(scene, CLAWD_ANIM_WAKE);
+}
+
 /* ---------- Multi-session positioning ---------- */
 
 static int find_id_in(const uint16_t *ids, int count, uint16_t target)
@@ -1854,8 +1909,14 @@ void scene_set_sessions(scene_t *s, const uint8_t *anims, const uint16_t *ids,
                     lv_anim_set_completed_cb(&a, walk_in_complete_cb);
                     lv_anim_start(&a);
                 } else {
-                    /* Same position — update animation in place */
-                    if (s->slots[new_i].cur_anim != new_anim) {
+                    /* Same position — update animation in place. Like the
+                     * single-session path, don't cut a playing oneshot (e.g.
+                     * "happy" when a subagent finishes): fallback_anim is
+                     * already new_anim, so scene_tick switches when it ends. */
+                    const anim_def_t *cur_def = &anim_defs[s->slots[new_i].cur_anim];
+                    bool playing_oneshot = !cur_def->looping &&
+                        s->slots[new_i].frame_idx < cur_def->frame_count - 1;
+                    if (!playing_oneshot && s->slots[new_i].cur_anim != new_anim) {
                         s->slots[new_i].cur_anim = new_anim;
                         s->slots[new_i].frame_idx = 0;
                         s->slots[new_i].last_frame_tick = lv_tick_get();
@@ -1992,6 +2053,7 @@ const char *anim_id_to_name(clawd_anim_id_t id)
         "thinking", "typing", "juggling", "building", "confused",
         "dizzy", "sweeping", "walking", "going_away",
         "debugger", "wizard", "conducting", "beacon",
+        "wake", "low_battery", "hat_mishap",
         "mini_clawd"
     };
     if ((int)id < (int)(sizeof(names) / sizeof(names[0]))) return names[id];

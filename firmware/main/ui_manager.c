@@ -256,6 +256,11 @@ void ui_manager_handle_event(const ble_evt_t *evt)
         }
         s_display_status = DISPLAY_STATUS_IDLE;
 
+        /* Sessions appearing while the crab sleeps: it plays the wake-up
+         * oneshot first. Checked on the scene (not s_display_status) so a
+         * crab that shows "disconnected" after a reconnect doesn't wake. */
+        bool waking = scene_is_sleeping(s_scene);
+
         /* Always use scene_set_sessions() — it has a single-session fast
          * path that updates slot 0 in place (same sprite object, same
          * Z-order, oneshot protection) so positioning is identical to the
@@ -263,6 +268,12 @@ void ui_manager_handle_event(const ble_evt_t *evt)
         scene_set_sessions(s_scene,
             evt->session_anims, evt->session_ids,
             evt->session_anim_count, evt->subagent_count, evt->session_overflow);
+
+        /* set_sessions has made the session animation slot 0's fallback, so
+         * the crab returns to it when the wake oneshot ends. */
+        if (waking && evt->session_anim_count > 0) {
+            scene_play_wake(s_scene);
+        }
 
         s_last_activity_tick = lv_tick_get();
         break;
@@ -275,6 +286,8 @@ void ui_manager_handle_event(const ble_evt_t *evt)
         s_display_status = new_status;
 
         clawd_anim_id_t anim = status_to_anim(new_status);
+        /* v1 hosts: leaving sleep plays the wake oneshot, then the fallback */
+        bool waking = new_status != DISPLAY_STATUS_SLEEPING && scene_is_sleeping(s_scene);
         scene_set_fallback_anim(s_scene, anim);
 
         /* Handle backlight for sleep/wake */
@@ -286,7 +299,7 @@ void ui_manager_handle_event(const ble_evt_t *evt)
 
         /* Don't interrupt a playing oneshot — the fallback will take effect when it finishes */
         if (!scene_is_playing_oneshot(s_scene)) {
-            scene_set_clawd_anim(s_scene, anim);
+            scene_set_clawd_anim(s_scene, waking ? CLAWD_ANIM_WAKE : anim);
         }
 
         s_last_activity_tick = lv_tick_get();

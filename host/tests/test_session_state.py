@@ -6,7 +6,7 @@ import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from clawd_tank_daemon.daemon import ClawdDaemon, _tool_to_anim
+from clawd_tank_daemon.daemon import ClawdDaemon, LOW_BATTERY_USAGE_PCT, _tool_to_anim
 
 
 def make_daemon():
@@ -1167,6 +1167,191 @@ async def test_tool_failed_does_not_create_notification_card():
     assert "s1" not in d._active_notifications
 
 
+# --- Web tool failure → hat_mishap (the wizard hat falls over its eyes) ---
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["WebSearch", "WebFetch"])
+async def test_web_tool_failure_shows_hat_mishap(tool):
+    d = make_daemon()
+    _add_session(d, "s1", {"state": "working", "last_event": time.time(), "tool_name": tool})
+    await d._handle_message({"event": "tool_failed", "session_id": "s1", "tool_name": tool})
+    assert d._compute_display_state()["anims"] == ["hat_mishap"]
+
+
+@pytest.mark.asyncio
+async def test_non_web_tool_failure_stays_confused():
+    d = make_daemon()
+    _add_session(d, "s1", {"state": "working", "last_event": time.time(), "tool_name": "Bash"})
+    await d._handle_message({"event": "tool_failed", "session_id": "s1", "tool_name": "Bash"})
+    assert d._compute_display_state()["anims"] == ["confused"]
+
+
+@pytest.mark.asyncio
+async def test_idle_prompt_after_web_tool_shows_confused_not_hat_mishap():
+    """An idle_prompt Notification is not a web failure, even if the last tool was web."""
+    d = make_daemon()
+    await d._handle_message({"event": "tool_use", "session_id": "s1", "tool_name": "WebFetch"})
+    await d._handle_message({
+        "event": "add", "hook": "Stop", "session_id": "s1", "project": "p", "message": "x",
+    })
+    await d._handle_message({
+        "event": "add", "hook": "Notification", "session_id": "s1", "project": "p", "message": "x",
+    })
+    assert d._compute_display_state()["anims"] == ["confused"]
+
+
+# --- Low usage headroom → low_battery instead of idle ---
+
+
+def test_idle_shows_low_battery_when_session_usage_high():
+    d = make_daemon()
+    _add_session(d, "s1", {"state": "idle", "last_event": time.time()})
+    d._latest_usage = {"session_pct": LOW_BATTERY_USAGE_PCT, "weekly_pct": 10}
+    assert d._compute_display_state()["anims"] == ["low_battery"]
+
+
+def test_idle_shows_low_battery_when_weekly_usage_high():
+    d = make_daemon()
+    _add_session(d, "s1", {"state": "idle", "last_event": time.time()})
+    d._latest_usage = {"session_pct": None, "weekly_pct": 97}
+    assert d._compute_display_state()["anims"] == ["low_battery"]
+
+
+def test_idle_stays_idle_below_low_battery_threshold():
+    d = make_daemon()
+    _add_session(d, "s1", {"state": "idle", "last_event": time.time()})
+    d._latest_usage = {"session_pct": LOW_BATTERY_USAGE_PCT - 1, "weekly_pct": None}
+    assert d._compute_display_state()["anims"] == ["idle"]
+
+
+def test_idle_stays_idle_without_usage_data():
+    d = make_daemon()
+    _add_session(d, "s1", {"state": "idle", "last_event": time.time()})
+    assert d._compute_display_state()["anims"] == ["idle"]
+
+
+def test_low_battery_only_replaces_idle():
+    d = make_daemon()
+    _add_session(d, "s1", {"state": "thinking", "last_event": time.time()})
+    _add_session(d, "s2", {"state": "idle", "last_event": time.time(), "subagents": {"a1"}})
+    _add_session(d, "s3", {"state": "idle", "last_event": time.time()})
+    d._latest_usage = {"session_pct": 99, "weekly_pct": 99}
+    assert d._compute_display_state()["anims"] == ["thinking", "conducting", "low_battery"]
+
+
+def _write_usage_cache(session_pct, weekly_pct):
+    from clawd_tank_daemon import daemon as daemon_mod
+    with open(daemon_mod.USAGE_CACHE_PATH, "w", encoding="utf-8") as fh:
+        json.dump({"rate_limits": {
+            "five_hour": {"used_percentage": session_pct},
+            "seven_day": {"used_percentage": weekly_pct},
+        }}, fh)
+
+
+@pytest.mark.asyncio
+async def test_usage_crossing_threshold_rebroadcasts_display_state():
+    d = make_daemon()
+    transport = MockTransport(name="sim")
+    d._transports["sim"] = transport
+    d._transport_versions["sim"] = 2
+    _add_session(d, "s1", {"state": "idle", "last_event": time.time()})
+    d._last_display_state = d._compute_display_state()
+
+    _write_usage_cache(95, 20)
+    await d._broadcast_usage()
+
+    sessions = [json.loads(p) for p in transport.written
+                if json.loads(p).get("action") == "set_sessions"]
+    assert sessions and sessions[-1]["anims"] == ["low_battery"]
+
+    transport.written.clear()
+    _write_usage_cache(5, 20)  # new 5h window: headroom is back
+    await d._broadcast_usage()
+    sessions = [json.loads(p) for p in transport.written
+                if json.loads(p).get("action") == "set_sessions"]
+    assert sessions and sessions[-1]["anims"] == ["idle"]
+
+
+# --- Subagent finished → happy oneshot on the parent session's slot ---
+
+
+@pytest.mark.asyncio
+async def test_subagent_stop_sends_happy_then_real_state_v2():
+    d = make_daemon()
+    transport = MockTransport(name="sim")
+    d._transports["sim"] = transport
+    d._transport_queues["sim"] = asyncio.Queue()
+    d._transport_versions["sim"] = 2
+    await d._handle_message({"event": "session_start", "session_id": "aaa"})
+    await d._handle_message({"event": "tool_use", "session_id": "aaa", "tool_name": "Bash"})
+    await d._handle_message({"event": "session_start", "session_id": "bbb"})
+    await d._handle_message({"event": "subagent_start", "session_id": "bbb", "agent_id": "a1"})
+    transport.written.clear()
+
+    await d._handle_message({"event": "subagent_stop", "session_id": "bbb", "agent_id": "a1"})
+
+    sessions = [json.loads(p) for p in transport.written
+                if json.loads(p).get("action") == "set_sessions"]
+    assert len(sessions) == 2
+    assert sessions[0]["anims"] == ["building", "happy"]
+    # The real state follows right away so the firmware returns to it once
+    # the oneshot ends (it does not interrupt a playing oneshot).
+    assert sessions[1]["anims"] == ["building", "idle"]
+    assert d._last_display_state["anims"] == ["building", "idle"]
+
+
+@pytest.mark.asyncio
+async def test_subagent_stop_skips_happy_on_v1_transport():
+    d = make_daemon()
+    transport = MockTransport(name="ble")
+    d._transports["ble"] = transport
+    d._transport_queues["ble"] = asyncio.Queue()
+    d._transport_versions["ble"] = 1
+    await d._handle_message({"event": "session_start", "session_id": "s1"})
+    await d._handle_message({"event": "subagent_start", "session_id": "s1", "agent_id": "a1"})
+    transport.written.clear()
+
+    await d._handle_message({"event": "subagent_stop", "session_id": "s1", "agent_id": "a1"})
+
+    statuses = [json.loads(p)["status"] for p in transport.written
+                if json.loads(p).get("action") == "set_status"]
+    assert statuses == ["idle"]
+
+
+@pytest.mark.asyncio
+async def test_subagent_stop_for_unknown_agent_sends_no_happy():
+    d = make_daemon()
+    transport = MockTransport(name="sim")
+    d._transports["sim"] = transport
+    d._transport_queues["sim"] = asyncio.Queue()
+    d._transport_versions["sim"] = 2
+    await d._handle_message({"event": "session_start", "session_id": "s1"})
+    transport.written.clear()
+
+    await d._handle_message({"event": "subagent_stop", "session_id": "s1", "agent_id": "nope"})
+
+    assert not any("happy" in p for p in transport.written)
+
+
+@pytest.mark.asyncio
+async def test_subagent_stop_for_hidden_session_sends_no_happy():
+    """A session beyond the 4 visible slots has no crab to celebrate on."""
+    d = make_daemon()
+    transport = MockTransport(name="sim")
+    d._transports["sim"] = transport
+    d._transport_queues["sim"] = asyncio.Queue()
+    d._transport_versions["sim"] = 2
+    for sid in ("s1", "s2", "s3", "s4", "s5"):
+        await d._handle_message({"event": "session_start", "session_id": sid})
+    await d._handle_message({"event": "subagent_start", "session_id": "s5", "agent_id": "a1"})
+    transport.written.clear()
+
+    await d._handle_message({"event": "subagent_stop", "session_id": "s5", "agent_id": "a1"})
+
+    assert not any("happy" in p for p in transport.written)
+
+
 def test_idle_session_keeps_own_anim_when_notifications_active():
     """Idle sessions keep their own animation even when notifications are present."""
     d = make_daemon()
@@ -1562,3 +1747,78 @@ def test_liveness_persists_after_eviction(tmp_path):
     import json as _json
     raw = _json.loads((tmp_path / "sessions.json").read_text())
     assert "s1" not in raw.get("sessions", {})
+
+
+# --- Stop (end of turn) → no notification card, happy oneshot instead ---
+
+
+def _v2_daemon():
+    d = make_daemon()
+    transport = MockTransport(name="sim")
+    d._transports["sim"] = transport
+    d._transport_queues["sim"] = asyncio.Queue()
+    d._transport_versions["sim"] = 2
+    return d, transport
+
+
+STOP_MSG = {"event": "add", "hook": "Stop", "session_id": "aaa",
+            "project": "p", "message": "Esperando tu respuesta"}
+
+
+@pytest.mark.asyncio
+async def test_stop_adds_no_notification_card():
+    """End of turn is not something the user must act on: no card is stored or
+    forwarded to the device."""
+    d, _ = _v2_daemon()
+    await d._handle_message({"event": "session_start", "session_id": "aaa"})
+    for q in d._transport_queues.values():
+        while not q.empty():
+            q.get_nowait()
+
+    await d._handle_message(dict(STOP_MSG))
+
+    assert "aaa" not in d._active_notifications
+    for q in d._transport_queues.values():
+        queued = [q.get_nowait() for _ in range(q.qsize())]
+        assert not any(m.get("event") == "add" for m in queued)
+
+
+@pytest.mark.asyncio
+async def test_stop_plays_happy_then_idle_v2():
+    d, transport = _v2_daemon()
+    await d._handle_message({"event": "session_start", "session_id": "aaa"})
+    await d._handle_message({"event": "tool_use", "session_id": "aaa", "tool_name": "Bash"})
+    transport.written.clear()
+
+    await d._handle_message(dict(STOP_MSG))
+
+    sessions = [json.loads(p) for p in transport.written
+                if json.loads(p).get("action") == "set_sessions"]
+    assert [s["anims"] for s in sessions] == [["happy"], ["idle"]]
+
+
+@pytest.mark.asyncio
+async def test_stop_with_running_subagents_returns_to_conducting():
+    d, transport = _v2_daemon()
+    await d._handle_message({"event": "session_start", "session_id": "aaa"})
+    await d._handle_message({"event": "subagent_start", "session_id": "aaa", "agent_id": "a1"})
+    transport.written.clear()
+
+    await d._handle_message(dict(STOP_MSG))
+
+    sessions = [json.loads(p) for p in transport.written
+                if json.loads(p).get("action") == "set_sessions"]
+    assert [s["anims"] for s in sessions] == [["happy"], ["conducting"]]
+    assert sessions[-1]["subagents"] == 1
+
+
+@pytest.mark.asyncio
+async def test_other_cards_still_shown():
+    """Permission-free attention signals keep their card: API errors and the
+    idle_prompt notification."""
+    d, _ = _v2_daemon()
+    await d._handle_message({"event": "add", "hook": "StopFailure", "session_id": "aaa",
+                             "project": "p", "message": "Error de API"})
+    await d._handle_message({"event": "add", "hook": "Notification", "session_id": "bbb",
+                             "project": "p", "message": "Esperando tu respuesta"})
+    assert {"aaa", "bbb"} <= set(d._active_notifications)

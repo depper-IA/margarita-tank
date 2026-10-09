@@ -67,6 +67,10 @@ static int parse_anim_name(const char *str) {
     if (strcmp(str, "wizard") == 0)     return CLAWD_ANIM_WIZARD;
     if (strcmp(str, "conducting") == 0) return CLAWD_ANIM_CONDUCTING;
     if (strcmp(str, "beacon") == 0)     return CLAWD_ANIM_BEACON;
+    if (strcmp(str, "happy") == 0)      return CLAWD_ANIM_HAPPY;
+    if (strcmp(str, "wake") == 0)       return CLAWD_ANIM_WAKE;
+    if (strcmp(str, "low_battery") == 0) return CLAWD_ANIM_LOW_BATTERY;
+    if (strcmp(str, "hat_mishap") == 0) return CLAWD_ANIM_HAT_MISHAP;
     return -1;
 }
 

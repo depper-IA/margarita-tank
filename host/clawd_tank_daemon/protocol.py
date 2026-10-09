@@ -276,6 +276,8 @@ def display_state_to_v1_payload(state: dict) -> str:
     if "status" in state:
         return json.dumps({"action": "set_status", "status": state["status"]})
     anims = state.get("anims", [])
+    # v2-only names fall through to a v1 status: "hat_mishap" counts as
+    # confused, "low_battery" and the "happy" oneshot read as idle.
     WORKING_ANIMS = {"typing", "building", "debugger", "wizard", "conducting", "beacon"}
     working = sum(1 for a in anims if a in WORKING_ANIMS)
     if "alert" in anims:
@@ -285,7 +287,7 @@ def display_state_to_v1_payload(state: dict) -> str:
         status = f"working_{min(working, 3)}"
     elif "thinking" in anims:
         status = "thinking"
-    elif any(a in ("confused", "dizzy") for a in anims):
+    elif any(a in ("confused", "dizzy", "hat_mishap") for a in anims):
         status = "confused"
     else:
         status = "idle"

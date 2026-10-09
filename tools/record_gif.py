@@ -31,6 +31,7 @@ ANIMATIONS = [
     "idle", "sleeping",
     "thinking", "typing", "juggling", "building", "confused", "sweeping",
     "debugger", "wizard", "conducting", "beacon",
+    "happy", "wake", "low_battery", "hat_mishap",
 ]
 
 # Map friendly names to set_status values (v1 intensity tiers)

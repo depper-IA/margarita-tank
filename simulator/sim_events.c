@@ -232,6 +232,15 @@ void sim_events_init_inline(const char *events_str)
                 else if (strcmp(anim_str, "juggling") == 0) anim = CLAWD_ANIM_JUGGLING;
                 else if (strcmp(anim_str, "sweeping") == 0) anim = CLAWD_ANIM_SWEEPING;
                 else if (strcmp(anim_str, "dizzy") == 0) anim = CLAWD_ANIM_DIZZY;
+                else if (strcmp(anim_str, "alert") == 0) anim = CLAWD_ANIM_ALERT;
+                else if (strcmp(anim_str, "debugger") == 0) anim = CLAWD_ANIM_DEBUGGER;
+                else if (strcmp(anim_str, "wizard") == 0) anim = CLAWD_ANIM_WIZARD;
+                else if (strcmp(anim_str, "conducting") == 0) anim = CLAWD_ANIM_CONDUCTING;
+                else if (strcmp(anim_str, "beacon") == 0) anim = CLAWD_ANIM_BEACON;
+                else if (strcmp(anim_str, "happy") == 0) anim = CLAWD_ANIM_HAPPY;
+                else if (strcmp(anim_str, "wake") == 0) anim = CLAWD_ANIM_WAKE;
+                else if (strcmp(anim_str, "low_battery") == 0) anim = CLAWD_ANIM_LOW_BATTERY;
+                else if (strcmp(anim_str, "hat_mishap") == 0) anim = CLAWD_ANIM_HAT_MISHAP;
 
                 if (anim < 0) {
                     fprintf(stderr, "[sim] Unknown session anim: %s\n", anim_str);

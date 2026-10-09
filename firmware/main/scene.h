@@ -22,6 +22,9 @@ typedef enum {
     CLAWD_ANIM_WIZARD,      /* floating with wand + sparkles (WebSearch/WebFetch) */
     CLAWD_ANIM_CONDUCTING,  /* arms waving, data streaming (Agent/subagents) */
     CLAWD_ANIM_BEACON,      /* antenna with radio waves (LSP/MCP) */
+    CLAWD_ANIM_WAKE,        /* stretching awake (oneshot, leaving sleep) */
+    CLAWD_ANIM_LOW_BATTERY, /* dozing next to a red battery (high usage) */
+    CLAWD_ANIM_HAT_MISHAP,  /* wizard hat over the eyes (web tool failed) */
     CLAWD_ANIM_MINI_CLAWD,  /* tiny 12x12 crab for HUD subagent counter */
 } clawd_anim_id_t;
 
@@ -37,6 +40,8 @@ void scene_tick(scene_t *scene);
 bool scene_is_playing_oneshot(scene_t *scene);
 bool scene_is_multi_session(scene_t *scene);
 void scene_play_slot0_oneshot(scene_t *scene, clawd_anim_id_t anim);
+bool scene_is_sleeping(scene_t *scene);
+void scene_play_wake(scene_t *scene);
 void scene_set_sessions(scene_t *scene, const uint8_t *anims, const uint16_t *ids,
                         int count, uint8_t subagent_count, uint8_t overflow);
 #ifdef SIMULATOR

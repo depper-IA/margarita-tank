@@ -226,6 +226,10 @@ static int parse_v2_anim_name(const char *name) {
     if (strcmp(name, "wizard") == 0)     return CLAWD_ANIM_WIZARD;
     if (strcmp(name, "conducting") == 0) return CLAWD_ANIM_CONDUCTING;
     if (strcmp(name, "beacon") == 0)     return CLAWD_ANIM_BEACON;
+    if (strcmp(name, "happy") == 0)      return CLAWD_ANIM_HAPPY;
+    if (strcmp(name, "wake") == 0)       return CLAWD_ANIM_WAKE;
+    if (strcmp(name, "low_battery") == 0) return CLAWD_ANIM_LOW_BATTERY;
+    if (strcmp(name, "hat_mishap") == 0) return CLAWD_ANIM_HAT_MISHAP;
     /* Also support existing v2-capable anim names */
     if (strcmp(name, "typing") == 0)     return CLAWD_ANIM_TYPING;
     if (strcmp(name, "thinking") == 0)   return CLAWD_ANIM_THINKING;

@@ -505,6 +505,25 @@ def test_display_state_to_v1_dizzy_maps_to_confused():
     assert parsed["status"] == "confused"
 
 
+def test_display_state_to_v1_hat_mishap_maps_to_confused():
+    state = {"anims": ["hat_mishap"], "ids": [1], "subagents": 0}
+    parsed = json.loads(display_state_to_v1_payload(state))
+    assert parsed["status"] == "confused"
+
+
+def test_display_state_to_v1_low_battery_maps_to_idle():
+    state = {"anims": ["low_battery"], "ids": [1], "subagents": 0}
+    parsed = json.loads(display_state_to_v1_payload(state))
+    assert parsed["status"] == "idle"
+
+
+def test_display_state_to_v1_happy_does_not_mask_other_sessions():
+    """happy is a v2-only oneshot; v1 ignores it and reports the other sessions."""
+    state = {"anims": ["happy", "thinking"], "ids": [1, 2], "subagents": 0}
+    parsed = json.loads(display_state_to_v1_payload(state))
+    assert parsed["status"] == "thinking"
+
+
 # --- PID, source, reason capture (ghost-crab fix) ---
 
 def test_session_start_includes_pid_and_source():

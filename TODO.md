@@ -24,6 +24,23 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 
 ---
 
+## Phase 1 new crab animations — Implemented (not yet flashed)
+
+- [x] **happy on SubagentStop** — when a subagent of a visible session finishes, v2
+  transports get a `set_sessions` with that slot = `happy`, immediately followed by the
+  real state (forced broadcast) which the firmware keeps as the slot's fallback. v1: skipped.
+- [x] **wake** (new sprite, 12f oneshot) — firmware-side: `ui_manager.c` plays it on slot 0
+  when `set_sessions` (or a v1 non-sleeping `set_status`) arrives while the scene shows the
+  sleeping crab; skipped while slot 0 walks to a new position.
+- [x] **low_battery** (new sprite, 48f @6fps) — an `idle` session shows it when the 5h or
+  weekly usage is >= `LOW_BATTERY_USAGE_PCT` (90); a usage poll re-broadcasts the display state.
+- [x] **hat_mishap** (new sprite, 42f @6fps) — a `tool_failed` on WebSearch/WebFetch shows it
+  instead of `confused`; other tool failures stay `confused`.
+- [x] **Multi-session oneshot protection** — the multi-session `set_sessions` path no longer
+  cuts a playing oneshot (matches the single-session path).
+- [ ] Flash the device and check the four animations on hardware. Old firmware drops
+  slots whose anim name it does not know, so update host and firmware together.
+
 ## Windows Claude PID resolution — Complete
 
 - [x] **Hook resolves Claude's PID on Windows** — `_find_claude_pid()` (NOTIFY_SCRIPT,

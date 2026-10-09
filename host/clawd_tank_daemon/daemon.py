@@ -44,6 +44,15 @@ TOOL_ANIMATION_MAP = {
 }
 
 
+# Tools whose failure shows "hat_mishap" (the wizard hat falls over the crab's
+# eyes) instead of the generic "confused". They are the tools that show "wizard".
+WEB_TOOLS = frozenset({"WebSearch", "WebFetch"})
+
+# An idle crab shows "low_battery" once the 5h or weekly usage reaches this
+# percentage: little headroom is left before the rate limit.
+LOW_BATTERY_USAGE_PCT = 90
+
+
 def _tool_to_anim(tool_name: str) -> str:
     if tool_name and tool_name.startswith("mcp__"):
         return "beacon"
@@ -179,6 +188,9 @@ class ClawdDaemon:
         self._socket = SocketServer(on_message=self._handle_message)
         self._active_notifications: dict[str, dict] = {}
         self._last_usage_key: Optional[tuple] = None
+        # Latest {session_pct, weekly_pct, reset_seconds} read from the usage
+        # cache; drives the "low_battery" idle animation.
+        self._latest_usage: Optional[dict] = None
         self._running = True
         self._shutdown_event = asyncio.Event()
         self._lock_fd: int | None = None
@@ -251,7 +263,10 @@ class ClawdDaemon:
         logger.info("Socket msg: event=%s hook=%s session=%s%s%s",
                      event, hook, session_id[:12], session_project, extra)
 
-        if event == "add":
+        # End of turn (Stop) is shown by the crab (a happy oneshot), not by a
+        # notification card: cards are for things the user must act on.
+        end_of_turn = event == "add" and hook == "Stop"
+        if event == "add" and not end_of_turn:
             self._active_notifications[session_id] = msg
         elif event == "dismiss":
             self._active_notifications.pop(session_id, None)
@@ -320,14 +335,22 @@ class ClawdDaemon:
                     await transport.write_notification(fallback_payload)
             self._last_display_state = computed
 
-        for q in self._transport_queues.values():
-            await q.put(msg)
+        # --- Handle subagent finished: celebrate on the parent's slot ---
+        celebrated = False
+        if (event == "subagent_stop" and changed) or end_of_turn:
+            celebrated = await self._send_session_oneshot(session_id, "happy")
+
+        if not end_of_turn:
+            for q in self._transport_queues.values():
+                await q.put(msg)
 
         if self._observer:
             self._observer.on_notification_change(len(self._active_notifications))
 
         if event != "compact":
-            await self._broadcast_display_state_if_changed()
+            # After a oneshot, always re-send the real state: the firmware keeps
+            # it as the slot's fallback and returns to it when the oneshot ends.
+            await self._broadcast_display_state_if_changed(force=celebrated)
 
         if changed:
             self._persist_sessions()
@@ -362,11 +385,15 @@ class ClawdDaemon:
             elif state["state"] == "thinking":
                 anims.append("thinking")
             elif state["state"] == "confused":
-                anims.append("confused")
+                anims.append(
+                    "hat_mishap" if state.get("tool_name") in WEB_TOOLS else "confused"
+                )
             elif state["state"] == "error":
                 anims.append("dizzy")
             elif session_subagents:
                 anims.append("conducting")
+            elif self._usage_is_low():
+                anims.append("low_battery")
             else:
                 anims.append("idle")
             ids.append(display_id)
@@ -378,6 +405,34 @@ class ClawdDaemon:
         if len(self._session_order) > 4:
             result["overflow"] = len(self._session_order) - 4
         return result
+
+    def _usage_is_low(self) -> bool:
+        """True when the 5h or weekly usage has reached LOW_BATTERY_USAGE_PCT."""
+        usage = self._latest_usage or {}
+        return any(
+            isinstance(pct, (int, float)) and pct >= LOW_BATTERY_USAGE_PCT
+            for pct in (usage.get("session_pct"), usage.get("weekly_pct"))
+        )
+
+    async def _send_session_oneshot(self, session_id: str, anim: str) -> bool:
+        """Send a set_sessions with session_id's slot showing a oneshot `anim` to
+        every connected v2 transport. v1 transports have no per-session slots and
+        are skipped. Returns False when the session has no visible slot."""
+        state = self._compute_display_state()
+        if "anims" not in state:
+            return False
+        did = next((d for sid, d in self._session_order if sid == session_id), None)
+        if did is None or did not in state["ids"]:
+            return False
+        state["anims"][state["ids"].index(did)] = anim
+        payload = display_state_to_ble_payload(state)
+        sent = False
+        for name, transport in self._transports.items():
+            if transport.is_connected and self._transport_versions.get(name, 1) >= 2:
+                logger.info("Display oneshot: %s on session %s", anim, session_id[:12])
+                await transport.write_notification(payload)
+                sent = True
+        return sent
 
     def _enter_state(
         self, session_id: str, state: str, tool_name: str, now: float, *, create: bool,
@@ -449,6 +504,9 @@ class ClawdDaemon:
                 self._session_states[session_id]["state"] = "idle"
             elif hook == "Notification":
                 self._session_states[session_id]["state"] = "confused"
+                # idle_prompt is not a tool failure: drop the last tool so a
+                # stale web tool doesn't turn it into "hat_mishap".
+                self._session_states[session_id]["tool_name"] = ""
             elif hook == "StopFailure":
                 self._session_states[session_id]["state"] = "error"
             self._session_states[session_id]["last_event"] = now
@@ -531,10 +589,11 @@ class ClawdDaemon:
             next_id=self._next_display_id,
         )
 
-    async def _broadcast_display_state_if_changed(self) -> None:
-        """Broadcast display state to all connected transports if changed."""
+    async def _broadcast_display_state_if_changed(self, force: bool = False) -> None:
+        """Broadcast display state to all connected transports if changed (or
+        unconditionally with force=True)."""
         new_state = self._compute_display_state()
-        if new_state == self._last_display_state:
+        if new_state == self._last_display_state and not force:
             return
         self._last_display_state = new_state
         if "anims" in new_state:
@@ -558,6 +617,7 @@ class ClawdDaemon:
         usage = read_usage_from_cache(USAGE_CACHE_PATH)
         if usage is None:
             return
+        self._latest_usage = usage
         payload = usage_to_ble_payload(
             usage.get("session_pct"),
             usage.get("weekly_pct"),
@@ -580,6 +640,10 @@ class ClawdDaemon:
                     await transport.write_notification(payload)
                 except Exception:
                     logger.exception("Failed to send usage to '%s'", name)
+
+        # Usage crossing LOW_BATTERY_USAGE_PCT flips idle crabs to/from
+        # "low_battery"; no-op when the display state did not change.
+        await self._broadcast_display_state_if_changed()
 
     async def _usage_checker(self) -> None:
         """Async task: periodically poll the usage cache and broadcast it."""
