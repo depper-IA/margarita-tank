@@ -3,6 +3,7 @@ import asyncio
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from bleak.exc import BleakError
 from clawd_tank_daemon.ble_client import (
     ClawdBleClient,
     CONFIG_CHR_UUID,
@@ -689,3 +690,139 @@ async def test_disconnect_callback_from_stray_client_keeps_current_link():
 
     assert ble._client is current
     assert calls == []
+
+
+# --- Scan errors must not end the connect loop ---
+#
+# Field bug (macOS): the first CBCentralManager of a process waits for the TCC
+# privacy check, which takes 2-4 s at app start. bleak 0.22.3's
+# CentralManagerDelegate.init blocks for 1 s and then raises
+# BleakError("Bluetooth device is turned off") because the state is still
+# "unknown". That error used to escape the connect loop and, with it, kill the
+# daemon's sender task, so nothing ever reconnected until the user clicked the
+# menu's Reconnect item.
+
+
+@pytest.fixture
+def recorded_sleeps(monkeypatch):
+    """Record every asyncio.sleep delay and skip the waiting (still yielding to
+    the loop), so back-off behaviour can be asserted without real delays."""
+    delays: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(delay, result=None):
+        delays.append(delay)
+        await real_sleep(0)
+        return result
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    return delays
+
+
+def _connected_bleak_client() -> MagicMock:
+    client = MagicMock()
+    client.connect = AsyncMock()
+    client.is_connected = True
+    client.mtu_size = 256
+    return client
+
+
+@pytest.mark.asyncio
+async def test_connect_retries_when_the_scan_raises(recorded_sleeps):
+    """A scan that raises (bleak's "Bluetooth device is turned off" while macOS
+    is still checking privacy permissions) must be retried, not propagated."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = _connected_bleak_client()
+    scan = AsyncMock(
+        side_effect=[
+            BleakError("Bluetooth device is turned off"),
+            BleakError("Bluetooth device is turned off"),
+            device,
+        ]
+    )
+
+    with patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name", scan
+    ), patch("clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client):
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    assert scan.await_count == 3
+    assert ble.is_connected
+    # It backs off between failed scans instead of spinning.
+    assert len(recorded_sleeps) == 2
+    assert all(delay > 0 for delay in recorded_sleeps)
+
+
+@pytest.mark.asyncio
+async def test_scan_error_backoff_grows_and_is_capped(recorded_sleeps):
+    """A persistent scan error (Bluetooth really off) must not hammer
+    CoreBluetooth: each failed attempt blocks bleak's init for a second."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = _connected_bleak_client()
+    failures = 12
+    scan = AsyncMock(
+        side_effect=[BleakError("Bluetooth device is turned off")] * failures
+        + [device]
+    )
+
+    with patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name", scan
+    ), patch("clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client):
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    assert len(recorded_sleeps) == failures
+    assert recorded_sleeps == sorted(recorded_sleeps)
+    assert recorded_sleeps[0] < recorded_sleeps[-1]
+    assert max(recorded_sleeps) <= 15
+
+
+@pytest.mark.asyncio
+async def test_scan_errors_are_logged_without_spamming(caplog, recorded_sleeps):
+    """The first failure of a streak says why the scan failed; the rest of a
+    long streak is rate limited."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = _connected_bleak_client()
+    failures = 20
+    scan = AsyncMock(
+        side_effect=[BleakError("Bluetooth device is turned off")] * failures
+        + [device]
+    )
+
+    with caplog.at_level("INFO", logger="clawd-tank.ble"), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name", scan
+    ), patch("clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client):
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    scan_failures = [
+        r for r in caplog.records
+        if r.levelname == "WARNING" and "scan failed" in r.getMessage().lower()
+    ]
+    assert scan_failures, "a failing scan left no trace in the log"
+    assert "turned off" in scan_failures[0].getMessage()
+    assert len(scan_failures) <= 5
+
+
+@pytest.mark.asyncio
+async def test_scan_that_finds_nothing_is_reported_now_and_then(caplog):
+    """A board that stays out of reach used to leave only DEBUG lines, so the
+    log looked like the loop had stopped. Say so at INFO every few scans, not
+    on every one."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = _connected_bleak_client()
+    misses = 12
+    scan = AsyncMock(side_effect=[None] * misses + [device])
+
+    with caplog.at_level("INFO", logger="clawd-tank.ble"), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name", scan
+    ), patch("clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client):
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    not_found = [
+        r for r in caplog.records
+        if r.levelname == "INFO" and "not found" in r.getMessage().lower()
+    ]
+    assert 1 <= len(not_found) <= 3
