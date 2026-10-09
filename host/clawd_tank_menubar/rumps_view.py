@@ -106,6 +106,13 @@ class RumpsTrayView:
         )
         self._hooks_item.state = controller.hooks_installed
 
+        # Claude Code mod: the Margarita side panel inside Claude Code
+        self._claude_mod_item = rumps.MenuItem(
+            "Claude Code Mod (panel)",
+            callback=lambda _sender: controller.toggle_claude_mod(),
+        )
+        self._claude_mod_item.state = controller.claude_mod_enabled
+
         # Launch at login
         self._login_item = rumps.MenuItem(
             "Launch at Login",
@@ -132,6 +139,7 @@ class RumpsTrayView:
             self._session_timeout_menu,
             None,
             self._hooks_item,
+            self._claude_mod_item,
             self._login_item,
             None,
             self._version_item,
@@ -208,8 +216,9 @@ class RumpsTrayView:
         for seconds, item in self._session_timeout_items.items():
             item.state = (seconds == state.session_timeout_seconds)
 
-        # --- Hooks / login ---
+        # --- Hooks / Claude Code mod / login ---
         self._hooks_item.state = state.hooks_installed
+        self._claude_mod_item.state = state.claude_mod_enabled
         self._login_item.state = state.login_enabled
 
         # --- Icon and global state ---

@@ -140,6 +140,11 @@ class WindowsTrayView:
                 checked=has_state(lambda s: s.hooks_installed),
             ),
             pystray.MenuItem(
+                "Claude Code Mod (panel)",
+                lambda item: controller.toggle_claude_mod(),
+                checked=has_state(lambda s: s.claude_mod_enabled),
+            ),
+            pystray.MenuItem(
                 "Launch at Login",
                 lambda item: controller.toggle_login(),
                 checked=has_state(lambda s: s.login_enabled),
