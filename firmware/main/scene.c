@@ -109,11 +109,13 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define ASTRO_X            290         /* right edge of the 320px scene */
 #define ASTRO_Y            44          /* lowered so it clears the top usage bar */
 
-/* Frame timing in ms per animation */
-#define IDLE_FRAME_MS      (1000 / 6)   /* 167ms @ 6fps */
-#define ALERT_FRAME_MS     (1000 / 10)  /* 100ms @ 10fps */
-#define HAPPY_FRAME_MS     (1000 / 10)  /* 100ms @ 10fps */
-#define SLEEPING_FRAME_MS  (1000 / 6)   /* 167ms @ 6fps */
+/* Frame timing in ms per animation.
+ * 6fps anims use (1000 + 3) / 6 == 167 so integer division rounds to nearest
+ * (plain 1000 / 6 truncates to 166). 8fps (125) and 10fps (100) divide evenly. */
+#define IDLE_FRAME_MS      ((1000 + 3) / 6)  /* 167ms @ 6fps */
+#define ALERT_FRAME_MS     (1000 / 10)       /* 100ms @ 10fps */
+#define HAPPY_FRAME_MS     (1000 / 10)       /* 100ms @ 10fps */
+#define SLEEPING_FRAME_MS  ((1000 + 3) / 6)  /* 167ms @ 6fps */
 #define DISCONN_FRAME_MS   (1000 / 6)   /* 167ms @ 6fps */
 #define THINKING_FRAME_MS  (1000 / 8)   /* 125ms @ 8fps */
 #define TYPING_FRAME_MS    (1000 / 8)   /* 125ms @ 8fps */
@@ -128,8 +130,8 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define CONDUCTING_FRAME_MS (1000 / 8)  /* 125ms @ 8fps */
 #define BEACON_FRAME_MS     (1000 / 8)  /* 125ms @ 8fps */
 #define WAKE_FRAME_MS       (1000 / 8)  /* 125ms @ 8fps */
-#define LOW_BATTERY_FRAME_MS (1000 / 6) /* 167ms @ 6fps */
-#define HAT_MISHAP_FRAME_MS (1000 / 6)  /* 167ms @ 6fps */
+#define LOW_BATTERY_FRAME_MS ((1000 + 3) / 6) /* 167ms @ 6fps */
+#define HAT_MISHAP_FRAME_MS ((1000 + 3) / 6)  /* 167ms @ 6fps */
 
 /* ---------- Animation metadata ---------- */
 
@@ -153,7 +155,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = IDLE_WIDTH,
         .height = IDLE_HEIGHT,
-        .y_offset = -8,   /* 8 - 16 (bottom rows cropped) */
+        .y_offset = 4,   /* v2 regen (62x41): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_ALERT] = {
         .rle_data = alert_rle_data,
@@ -163,7 +165,7 @@ static const anim_def_t anim_defs[] = {
         .looping = false,
         .width = ALERT_WIDTH,
         .height = ALERT_HEIGHT,
-        .y_offset = -4,   /* 8 - 12 */
+        .y_offset = 8,   /* v2 regen (64x69): -4 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_HAPPY] = {
         .rle_data = happy_rle_data,
@@ -173,7 +175,7 @@ static const anim_def_t anim_defs[] = {
         .looping = false,
         .width = HAPPY_WIDTH,
         .height = HAPPY_HEIGHT,
-        .y_offset = -7,   /* 28 - 35 */
+        .y_offset = 20,   /* v2 regen (90x75): -7 + crop delta 27, pending visual gate */
     },
     [CLAWD_ANIM_SLEEPING] = {
         .rle_data = sleeping_rle_data,
@@ -183,7 +185,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = SLEEPING_WIDTH,
         .height = SLEEPING_HEIGHT,
-        .y_offset = -8,   /* 8 - 16 */
+        .y_offset = 4,   /* v2 regen (70x75): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_DISCONNECTED] = {
         .rle_data = disconnected_rle_data,
@@ -203,7 +205,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = THINKING_WIDTH,
         .height = THINKING_HEIGHT,
-        .y_offset = -8,   /* 8 - 16 */
+        .y_offset = 4,   /* v2 regen (64x69): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_TYPING] = {
         .rle_data = typing_rle_data,
@@ -213,7 +215,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = TYPING_WIDTH,
         .height = TYPING_HEIGHT,
-        .y_offset = -8,   /* 8 - 16 */
+        .y_offset = 4,   /* v2 regen (68x57): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_JUGGLING] = {
         .rle_data = juggling_rle_data,
@@ -233,7 +235,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = BUILDING_WIDTH,
         .height = BUILDING_HEIGHT,
-        .y_offset = -4,   /* 8 - 12 */
+        .y_offset = 8,   /* v2 regen (110x50): -4 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_CONFUSED] = {
         .rle_data = confused_rle_data,
@@ -243,7 +245,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = CONFUSED_WIDTH,
         .height = CONFUSED_HEIGHT,
-        .y_offset = -4,   /* 8 - 12 */
+        .y_offset = 8,   /* v2 regen (70x57): -4 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_DIZZY] = {
         .rle_data = dizzy_rle_data,
@@ -253,7 +255,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = DIZZY_WIDTH,
         .height = DIZZY_HEIGHT,
-        .y_offset = -8,
+        .y_offset = 4,   /* v2 regen (72x53): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_SWEEPING] = {
         .rle_data = sweeping_rle_data,
@@ -263,7 +265,7 @@ static const anim_def_t anim_defs[] = {
         .looping = false,
         .width = SWEEPING_WIDTH,
         .height = SWEEPING_HEIGHT,
-        .y_offset = 0,    /* 8 - 8 */
+        .y_offset = 10,   /* v2 regen (110x38): 0 + crop delta 10, pending visual gate */
     },
     [CLAWD_ANIM_WALKING] = {
         .rle_data = walking_rle_data,
@@ -293,7 +295,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = DEBUGGER_WIDTH,
         .height = DEBUGGER_HEIGHT,
-        .y_offset = -8,
+        .y_offset = 4,   /* v2 regen (68x35): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_WIZARD] = {
         .rle_data = wizard_rle_data,
@@ -313,7 +315,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = CONDUCTING_WIDTH,
         .height = CONDUCTING_HEIGHT,
-        .y_offset = -8,
+        .y_offset = 4,   /* v2 regen (60x57): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_BEACON] = {
         .rle_data = beacon_rle_data,
@@ -343,7 +345,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = LOW_BATTERY_WIDTH,
         .height = LOW_BATTERY_HEIGHT,
-        .y_offset = -8,   /* 8 - 16 */
+        .y_offset = 4,   /* v2 regen (52x46): -8 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_HAT_MISHAP] = {
         .rle_data = hat_mishap_rle_data,
@@ -353,7 +355,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = HAT_MISHAP_WIDTH,
         .height = HAT_MISHAP_HEIGHT,
-        .y_offset = -7,   /* 8 - 15 */
+        .y_offset = 5,   /* v2 regen (68x51): -7 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_MINI_CLAWD] = {
         .rle_data = mini_crab_rle_data,
