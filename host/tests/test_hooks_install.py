@@ -427,8 +427,10 @@ def test_are_hooks_installed_reads_utf8_settings(settings_path):
 def test_install_preserves_non_ascii_user_settings(settings_path):
     settings_path.write_text(json.dumps(_NON_ASCII_SETTINGS, ensure_ascii=False), encoding="utf-8")
     install_hooks()
-    written = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert written["statusLine"] == _NON_ASCII_SETTINGS["statusLine"]
+    # The user's statusLine moves to the bridge's state file, intact and as UTF-8.
+    state = hooks.CLAWD_DIR / hooks.STATUSLINE_STATE_NAME
+    saved = json.loads(state.read_text(encoding="utf-8"))
+    assert saved["statusLine"] == _NON_ASCII_SETTINGS["statusLine"]
 
 
 # --- Never clobber a settings file we cannot parse ----------------------------

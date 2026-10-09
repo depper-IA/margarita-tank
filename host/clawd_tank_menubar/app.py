@@ -54,6 +54,8 @@ def main():
     logger.info("Clawd Tank %s starting", get_version())
 
     hooks.install_notify_script()
+
+    hooks.install_statusline_bridge_script()
     if not hooks.are_hooks_installed():
         logger.info("Hooks outdated, auto-updating...")
         hooks.install_hooks()

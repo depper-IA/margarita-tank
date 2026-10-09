@@ -438,6 +438,7 @@ def test_install_hooks_writes_real_settings_file_and_alerts_first_time(prefs_pat
 
     assert settings_path.exists()  # real file, really written
     assert controller._hooks_installed is True
+    assert hooks.STATUSLINE_SCRIPT_PATH.read_text(encoding="utf-8") == hooks.STATUSLINE_BRIDGE_SCRIPT
     assert view.alerts == [
         (
             "Hooks Installed",

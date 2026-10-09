@@ -388,6 +388,7 @@ class ClawdTankController(DaemonObserver):
     def install_hooks(self) -> None:
         was_installed = hooks.are_hooks_installed()
         hooks.install_notify_script()
+        hooks.install_statusline_bridge_script()
         if not hooks.install_hooks():
             self._view.alert(
                 title="Hooks Not Installed",

@@ -7,6 +7,7 @@ import logging
 import ntpath
 import os
 import re
+import shlex
 import stat
 import sys
 import tempfile
@@ -451,6 +452,27 @@ HOOK_COMMAND = build_hook_command(
 )
 
 
+def build_statusline_command(platform: str, frozen: bool, executable: str, script_path) -> str:
+    """The statusLine command that runs the bridge on `platform`.
+
+    Same rules as build_hook_command(): POSIX runs the executable script through
+    its shebang (shell-quoted, since this one is a shell command line that may
+    sit under a home directory with spaces); Windows names the interpreter, or
+    runs the bundled console exe when frozen.
+    """
+    if platform == "win32":
+        if frozen:
+            exe = ntpath.join(ntpath.dirname(executable), STATUSLINE_EXE_NAME)
+            return f'"{exe}"'
+        return f'"{executable}" "{script_path}"'
+    return shlex.quote(str(script_path))
+
+
+STATUSLINE_COMMAND = build_statusline_command(
+    sys.platform, getattr(sys, "frozen", False), sys.executable, STATUSLINE_SCRIPT_PATH
+)
+
+
 def build_hooks_config(command: str) -> dict:
     """Every managed hook group, each running `command`."""
     return {
@@ -519,6 +541,89 @@ def install_notify_script() -> None:
         # HOOK_COMMAND names the interpreter, so nothing needs to be executable.
         NOTIFY_SCRIPT_PATH.chmod(0o755)
     logger.info("Installed hook script: %s", NOTIFY_SCRIPT_PATH)
+
+
+def install_statusline_bridge_script() -> None:
+    """Write the standalone statusLine bridge to STATUSLINE_SCRIPT_PATH."""
+    CLAWD_DIR.mkdir(parents=True, exist_ok=True)
+    STATUSLINE_SCRIPT_PATH.write_text(STATUSLINE_BRIDGE_SCRIPT, encoding="utf-8")
+    if sys.platform != "win32":
+        STATUSLINE_SCRIPT_PATH.chmod(0o755)
+    logger.info("Installed statusLine bridge: %s", STATUSLINE_SCRIPT_PATH)
+
+
+def _statusline_state_path() -> Path:
+    return CLAWD_DIR / STATUSLINE_STATE_NAME
+
+
+def _statusline_is_ours(value) -> bool:
+    """True if a settings.statusLine value runs our bridge: the current command,
+    or one left by another interpreter / install folder (same script, or the
+    bundled exe), so a reinstall replaces it instead of treating it as the
+    user's own. A wrapper that merely mentions the script is not ours."""
+    if not isinstance(value, dict):
+        return False
+    command = value.get("command")
+    if not isinstance(command, str):
+        return False
+    if command == STATUSLINE_COMMAND or command.startswith(STATUSLINE_COMMAND + " "):
+        return True
+    script = re.escape(str(STATUSLINE_SCRIPT_PATH))
+    pattern = (
+        '^(?:"[^"]+" "' + script + '"'
+        r'|"[^"]*[\\/](?i:' + re.escape(STATUSLINE_EXE_NAME) + ')")( |$)')
+    return re.match(pattern, command) is not None
+
+
+def _write_json_atomic(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _wire_statusline(settings: dict) -> None:
+    """Point settings.statusLine at the bridge, saving the user's own first.
+
+    An already-ours value is only refreshed (never saved as the "original", or
+    the bridge would chain into itself). Extra keys such as `padding` carry over.
+    """
+    current = settings.get("statusLine")
+    state_path = _statusline_state_path()
+    if not _statusline_is_ours(current):
+        if current is None:
+            state_path.unlink(missing_ok=True)
+        else:
+            _write_json_atomic(state_path, {"statusLine": current})
+    base = current if isinstance(current, dict) else {}
+    settings["statusLine"] = {**base, "type": "command", "command": STATUSLINE_COMMAND}
+
+
+def _unwire_statusline(settings: dict) -> bool:
+    """Undo _wire_statusline(). Returns True if settings changed. A statusLine
+    that is not ours (the user replaced it after install) is left alone."""
+    state_path = _statusline_state_path()
+    if not _statusline_is_ours(settings.get("statusLine")):
+        return False
+    original = None
+    try:
+        original = json.loads(state_path.read_text(encoding="utf-8-sig")).get("statusLine")
+    except (OSError, ValueError, AttributeError):
+        pass
+    if original is None:
+        del settings["statusLine"]
+    else:
+        settings["statusLine"] = original
+    state_path.unlink(missing_ok=True)
+    return True
 
 
 def _matcher_of(entry: dict):
@@ -673,7 +778,9 @@ def are_hooks_installed() -> bool:
             for g in existing:
                 if _is_our_managed_group(g) and _matcher_of(g) not in expected_matchers:
                     return False
-    return True
+    statusline = settings.get("statusLine")
+    return (isinstance(statusline, dict)
+            and statusline.get("command") == STATUSLINE_COMMAND)
 
 
 def install_hooks() -> bool:
@@ -713,13 +820,16 @@ def install_hooks() -> bool:
                 kept.append(copy.deepcopy(our_entry))
         hooks[event_name] = kept
 
+    _wire_statusline(settings)
+
     _write_settings_atomic(settings)
     logger.info("Installed hooks in %s", CLAUDE_SETTINGS_PATH)
     return True
 
 
 def uninstall_hooks() -> bool:
-    """Remove every Clawd Tank hook group from Claude Code settings.
+    """Remove every Clawd Tank hook group from Claude Code settings and restore
+    the user's original statusLine (or drop ours when there was none).
 
     Uses the same ownership rule install_hooks() prunes with, applied to every
     event (not only those HOOKS_CONFIG lists today), so groups left by an older
@@ -744,27 +854,28 @@ def uninstall_hooks() -> bool:
         )
         return False
 
-    hooks = settings.get("hooks")
-    if not isinstance(hooks, dict):
-        return True
+    changed = _unwire_statusline(settings)
 
-    changed = False
-    for event_name, groups in list(hooks.items()):
-        if not isinstance(groups, list):
-            continue
-        kept = [g for g in groups if not _is_our_managed_group(g)]
-        if len(kept) == len(groups):
-            continue
-        changed = True
-        if kept:
-            hooks[event_name] = kept
-        else:
-            del hooks[event_name]
+    hooks = settings.get("hooks")
+    if isinstance(hooks, dict):
+        hooks_changed = False
+        for event_name, groups in list(hooks.items()):
+            if not isinstance(groups, list):
+                continue
+            kept = [g for g in groups if not _is_our_managed_group(g)]
+            if len(kept) == len(groups):
+                continue
+            hooks_changed = True
+            if kept:
+                hooks[event_name] = kept
+            else:
+                del hooks[event_name]
+        if hooks_changed and not hooks:
+            del settings["hooks"]
+        changed = changed or hooks_changed
 
     if not changed:
         return True
-    if not hooks:
-        del settings["hooks"]
 
     _write_settings_atomic(settings)
     logger.info("Uninstalled hooks from %s", CLAUDE_SETTINGS_PATH)
