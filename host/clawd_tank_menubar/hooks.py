@@ -332,8 +332,9 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         main()
 ''').replace("__DISPLAY_NAME__", repr(DISPLAY_NAME))
 
-# File name of the console-subsystem notify exe that the Windows PyInstaller
-# build ships next to the tray exe (see host/windows/margarita_tank.spec).
+# The statusLine bridge for Windows (STATUSLINE_BRIDGE_SH below is the POSIX one):
+# stdlib-only Python, installed as statusline_bridge.py and frozen into
+# margarita-statusline.exe by the PyInstaller build (see host/windows/margarita_tank.spec).
 STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
     #!/usr/bin/env python3
     """statusline_bridge - Claude Code statusLine wrapper for Clawd Tank.
@@ -552,6 +553,8 @@ STATUSLINE_BRIDGE_SH = textwrap.dedent('''\
     exit 0
 ''')
 
+# File name of the console-subsystem notify exe that the Windows PyInstaller
+# build ships next to the tray exe (see host/windows/margarita_tank.spec).
 NOTIFY_EXE_NAME = "margarita-notify.exe"
 
 
