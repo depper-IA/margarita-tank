@@ -51,6 +51,32 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 - [ ] Flash the device and check the four animations on hardware. Old (v2) firmware now gets
   downgraded names from the daemon, so host and firmware can be updated separately.
 
+## Phase 2: "turn finished, waiting for your reply" animation — Planned (needs the flashing PC)
+
+Today the end of a turn plays the `happy` oneshot and then the crab falls back to `idle`,
+so it looks the same as "nothing is happening". Add a distinct, persistent state for
+"Claude finished and is waiting for the next prompt". Not to be confused with the existing
+`waiting` session state (blocked on AskUserQuestion / PermissionRequest).
+
+Proposed behaviour:
+
+- [ ] New sprite `waiting_reply`: the crab looks at the user, taps a foot and shows a `!`
+  (loop, no oneshot). Draw it as `assets/svg-animations/clawd-waiting-reply.svg` on the
+  15x16 grid of `clawd-static-base.svg`, then run the sprite pipeline from CLAUDE.md
+  (`tools/svg2frames.py` → `tools/png2rgb565.py` → `tools/crop_sprites.py`, output
+  `firmware/main/assets/sprite_*.h`) and register the animation in `scene.c` / `ui_manager.c`.
+- [ ] Daemon: after the `happy` oneshot on `Stop`, the session state becomes `waiting_reply`
+  and stays until the next `UserPromptSubmit` (then `thinking`). It must be exempt from
+  staleness eviction the way `waiting` is, and evicted only by the PID-liveness check.
+- [ ] Protocol: bump the firmware protocol version to 4 (`ble_service.c`) and add the name
+  to `PHASE1_ANIM_FALLBACKS` (`waiting_reply` → `idle`) so v2/v3 firmware keeps working
+  (`downgrade_display_state`, `MIN_PROTOCOL_FOR_...`).
+- [ ] Flash the board and check it on hardware (the simulator compiles the same sources, so
+  it can be checked there first).
+- [ ] Claude Code mod (`margarita-band`, lives outside this repo in `~/.claude/dev-mods/`):
+  mirror the same state — happy for ~4 s after the turn, then a looping waiting pose with
+  the text `esperando tu respuesta` until the next prompt.
+
 ## Windows Claude PID resolution — Complete
 
 - [x] **Hook resolves Claude's PID on Windows** — `_find_claude_pid()` (NOTIFY_SCRIPT,
