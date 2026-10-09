@@ -60,6 +60,7 @@ def sandbox_home(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(hooks, "HOOKS_CONFIG", hooks.build_hooks_config(command))
     sl_script = clawd_dir / hooks.STATUSLINE_SCRIPT_PATH.name
     monkeypatch.setattr(hooks, "STATUSLINE_SCRIPT_PATH", sl_script)
+    monkeypatch.setattr(hooks, "MOD_DIR", clawd_dir / "claude-mod" / hooks.MOD_NAME)
     monkeypatch.setattr(hooks, "STATUSLINE_COMMAND", hooks.build_statusline_command(
         hooks.sys.platform, getattr(hooks.sys, "frozen", False),
         hooks.sys.executable, sl_script))

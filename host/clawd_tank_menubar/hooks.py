@@ -754,6 +754,229 @@ def _write_settings_atomic(settings: dict) -> None:
         raise
 
 
+# --- Claude Code mod (the Margarita side panel) -------------------------------
+#
+# The mod is a plain Claude Code plugin folder shipped with the app (claude-mod/
+# in a checkout, bundled as data in the packaged builds). The app copies it to
+# ~/.clawd-tank/claude-mod/margarita-band and enables it by listing that folder
+# in settings.json env.CLAUDE_CODE_PLUGIN_DIRS: Claude Code loads every folder in
+# that os.pathsep-separated list like `--plugin-dir`. It is opt-in and separate
+# from the hooks, and enabling or disabling touches only our own entry.
+
+MOD_NAME = "margarita-band"
+MOD_DIR = CLAWD_DIR / "claude-mod" / MOD_NAME
+PLUGIN_DIRS_ENV = "CLAUDE_CODE_PLUGIN_DIRS"
+
+# Never copied: dependency/cache folders and OS litter.
+_MOD_SKIP_DIRS = frozenset({"node_modules", "__pycache__"})
+_MOD_SKIP_FILES = frozenset({".DS_Store", "Thumbs.db"})
+# Typings Claude Code generates when the mod is developed. Not part of the mod,
+# so they are neither copied nor deleted from the installed copy.
+_MOD_GENERATED_DIR = (".claude-plugin", "types")
+
+
+def resolve_mod_source(frozen: bool, executable: str, resourcepath, module_file) -> Path:
+    """Where the mod shipped with this build lives.
+
+    A py2app bundle keeps data files under Contents/Resources (RESOURCEPATH); a
+    PyInstaller onedir build puts them next to the exe; a checkout keeps the
+    mod at the repository root, two folders above this package.
+    """
+    if frozen:
+        base = Path(resourcepath) if resourcepath else Path(executable).parent
+    else:
+        base = Path(module_file).parents[2]
+    return base / "claude-mod" / MOD_NAME
+
+
+MOD_SOURCE_DIR = resolve_mod_source(
+    bool(getattr(sys, "frozen", False)),
+    sys.executable,
+    os.environ.get("RESOURCEPATH"),
+    Path(__file__).resolve(),
+)
+
+
+def _iter_mod_files(root: Path):
+    """Relative path of every file the mod consists of under `root`."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel_dir = Path(dirpath).relative_to(root)
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in _MOD_SKIP_DIRS and (rel_dir / d).parts != _MOD_GENERATED_DIR
+        )
+        for name in sorted(filenames):
+            if name not in _MOD_SKIP_FILES:
+                yield rel_dir / name
+
+
+def _write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Temp file + os.replace, so a Claude Code session loading the mod while the
+    app refreshes it never reads a half-written file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def install_mod_files() -> bool:
+    """Make MOD_DIR an exact copy of the bundled mod. Safe to run on every start:
+    only files whose content differs are written, files the mod no longer ships
+    are removed, and the typings Claude Code generated in the copy are kept.
+
+    Returns False — without raising — when the build carries no mod or the copy
+    fails, so a caller can tell the user instead of crashing the tray app."""
+    if not MOD_SOURCE_DIR.is_dir():
+        logger.error("Not installing the Claude Code mod: %s not found", MOD_SOURCE_DIR)
+        return False
+    try:
+        wanted = set(_iter_mod_files(MOD_SOURCE_DIR))
+        MOD_DIR.mkdir(parents=True, exist_ok=True)
+        for rel in sorted(wanted):
+            data = (MOD_SOURCE_DIR / rel).read_bytes()
+            target = MOD_DIR / rel
+            if target.is_file() and target.read_bytes() == data:
+                continue
+            _write_bytes_atomic(target, data)
+        for rel in list(_iter_mod_files(MOD_DIR)):
+            if rel not in wanted:
+                (MOD_DIR / rel).unlink()
+        # Folders emptied by the removals above (deepest first; the root stays).
+        for dirpath, _dirs, _files in os.walk(MOD_DIR, topdown=False):
+            rel_dir = Path(dirpath).relative_to(MOD_DIR)
+            if rel_dir.parts and rel_dir.parts[:2] != _MOD_GENERATED_DIR and not any(Path(dirpath).iterdir()):
+                Path(dirpath).rmdir()
+    except OSError:
+        logger.exception("Could not install the Claude Code mod into %s", MOD_DIR)
+        return False
+    logger.info("Installed Claude Code mod: %s", MOD_DIR)
+    return True
+
+
+def _is_our_mod_entry(entry: str) -> bool:
+    """True if one plugin-folder entry names MOD_DIR (any spelling of the same
+    folder: trailing separator, `~`, case on Windows)."""
+    entry = entry.strip()
+    if not entry:
+        return False
+    def normal(p):
+        return os.path.normcase(os.path.normpath(os.path.expanduser(p)))
+    return normal(entry) == normal(str(MOD_DIR))
+
+
+def _plugin_dir_entries(settings: dict):
+    """(env, entries): the settings `env` object and the folders listed in its
+    CLAUDE_CODE_PLUGIN_DIRS. (None, None) when either has a shape we cannot
+    edit safely (an `env` that is not an object, a value that is not a string)."""
+    env = settings.get("env")
+    if env is None:
+        return {}, []
+    if not isinstance(env, dict):
+        return None, None
+    value = env.get(PLUGIN_DIRS_ENV)
+    if value is None:
+        return env, []
+    if not isinstance(value, str):
+        return None, None
+    return env, value.split(os.pathsep)
+
+
+def _remove_mod_entry(settings: dict) -> bool:
+    """Drop our folder from env.CLAUDE_CODE_PLUGIN_DIRS in `settings`. Returns True
+    if settings changed. The user's other folders stay; the key goes when ours was
+    the last one, and `env` goes only when removing the key emptied it."""
+    env, entries = _plugin_dir_entries(settings)
+    if not entries:
+        return False
+    kept = [e for e in entries if not _is_our_mod_entry(e)]
+    if len(kept) == len(entries):
+        return False
+    kept = [e for e in kept if e.strip()]
+    if kept:
+        env[PLUGIN_DIRS_ENV] = os.pathsep.join(kept)
+    else:
+        del env[PLUGIN_DIRS_ENV]
+        if not env:
+            del settings["env"]
+    return True
+
+
+def is_mod_enabled() -> bool:
+    """True if settings.json lists our mod folder in CLAUDE_CODE_PLUGIN_DIRS."""
+    settings = _load_settings()
+    if not settings:
+        return False
+    _env, entries = _plugin_dir_entries(settings)
+    return any(_is_our_mod_entry(e) for e in entries or [])
+
+
+def enable_mod() -> bool:
+    """Add MOD_DIR to env.CLAUDE_CODE_PLUGIN_DIRS, after the user's own folders.
+    Idempotent: the file is not rewritten when our folder is already listed.
+
+    Returns False — leaving the file untouched — when the settings file cannot be
+    parsed, or `env` / the variable has a shape we cannot extend safely."""
+    CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    settings = _load_settings()
+    if settings is None:
+        logger.warning(
+            "Not enabling the Claude Code mod: %s is not a readable JSON object; left untouched",
+            CLAUDE_SETTINGS_PATH,
+        )
+        return False
+    env, entries = _plugin_dir_entries(settings)
+    if entries is None:
+        logger.warning(
+            "Not enabling the Claude Code mod: env.%s in %s is not a string; left untouched",
+            PLUGIN_DIRS_ENV, CLAUDE_SETTINGS_PATH,
+        )
+        return False
+    if any(_is_our_mod_entry(e) for e in entries):
+        return True
+    env[PLUGIN_DIRS_ENV] = os.pathsep.join([e for e in entries if e.strip()] + [str(MOD_DIR)])
+    settings["env"] = env
+    _write_settings_atomic(settings)
+    logger.info("Enabled Claude Code mod in %s", CLAUDE_SETTINGS_PATH)
+    return True
+
+
+def disable_mod() -> bool:
+    """Remove only our folder from env.CLAUDE_CODE_PLUGIN_DIRS. The copied files
+    stay where they are. Idempotent; the file is not rewritten (or created) when
+    our folder is not listed.
+
+    Returns True when our folder is no longer listed. Returns False — leaving the
+    file untouched — when an existing settings file cannot be parsed."""
+    if not CLAUDE_SETTINGS_PATH.exists():
+        return True
+    settings = _load_settings()
+    if settings is None:
+        logger.warning(
+            "Not disabling the Claude Code mod: %s is not a readable JSON object; left untouched",
+            CLAUDE_SETTINGS_PATH,
+        )
+        return False
+    if not _remove_mod_entry(settings):
+        return True
+    _write_settings_atomic(settings)
+    logger.info("Disabled Claude Code mod in %s", CLAUDE_SETTINGS_PATH)
+    return True
+
+
+def install_mod() -> bool:
+    """Copy (or refresh) the mod files, then enable the mod. The settings file is
+    only touched once the folder it points at exists."""
+    return install_mod_files() and enable_mod()
+
+
 def are_hooks_installed() -> bool:
     """True only if every Clawd Tank hook (event + matcher) is already registered.
 
@@ -831,7 +1054,9 @@ def install_hooks() -> bool:
 
 def uninstall_hooks() -> bool:
     """Remove every Clawd Tank hook group from Claude Code settings and restore
-    the user's original statusLine (or drop ours when there was none).
+    the user's original statusLine (or drop ours when there was none). Our
+    Claude Code mod folder is dropped from env.CLAUDE_CODE_PLUGIN_DIRS too, so
+    Claude Code is not left pointing at a folder the uninstaller is removing.
 
     Uses the same ownership rule install_hooks() prunes with, applied to every
     event (not only those HOOKS_CONFIG lists today), so groups left by an older
@@ -857,7 +1082,7 @@ def uninstall_hooks() -> bool:
         return False
 
     is_unwired = _unwire_statusline(settings)
-    changed = is_unwired
+    changed = _remove_mod_entry(settings) or is_unwired
 
     hooks = settings.get("hooks")
     if isinstance(hooks, dict):
