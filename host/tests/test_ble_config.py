@@ -335,3 +335,75 @@ async def test_concurrent_connects_share_one_scan_and_connection():
     assert client_cls.call_count == 1
     bleak_client.disconnect.assert_not_awaited()
     assert ble.is_connected
+
+
+@pytest.mark.asyncio
+async def test_connect_retries_when_scan_never_finishes():
+    """bleak's WinRT scanner stop() waits for the Stopped event with no
+    timeout, so find_device_by_name can hang forever after its own scan
+    timeout. The connect loop must bound the whole scan and keep retrying."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = MagicMock()
+    bleak_client.connect = AsyncMock()
+    bleak_client.is_connected = True
+    bleak_client.mtu_size = 256
+    never = asyncio.Event()
+    calls = 0
+
+    async def hung_then_found(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            await never.wait()  # scanner stop() that never completes
+        return device
+
+    with patch(
+        "clawd_tank_daemon.ble_client.SCAN_HARD_TIMEOUT_SECS", 0.05
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(side_effect=hung_then_found),
+    ) as scan, patch(
+        "clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client
+    ) as client_cls:
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    assert scan.await_count == 2
+    assert client_cls.call_count == 1
+    assert ble.is_connected
+
+
+@pytest.mark.asyncio
+async def test_connect_retries_when_connect_never_finishes():
+    """bleak's WinRT connect() waits for the GATT session to become active
+    outside its own timeout, so a single attempt can hang forever. The
+    connect loop must bound each attempt and retry with a fresh client."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    never = asyncio.Event()
+
+    async def hang():
+        await never.wait()  # GATT session that never becomes active
+
+    hung = MagicMock()
+    hung.connect = AsyncMock(side_effect=hang)
+    good = MagicMock()
+    good.connect = AsyncMock()
+    good.is_connected = True
+    good.mtu_size = 256
+
+    with patch(
+        "clawd_tank_daemon.ble_client.CONNECT_HARD_TIMEOUT_SECS", 0.05
+    ), patch(
+        "clawd_tank_daemon.ble_client.SCAN_INTERVAL_SECS", 0
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(return_value=device),
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakClient", side_effect=[hung, good]
+    ) as client_cls:
+        ble = ClawdBleClient()
+        await asyncio.wait_for(ble.connect(), timeout=2)
+
+    assert client_cls.call_count == 2
+    assert ble._client is good
+    assert ble.is_connected

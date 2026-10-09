@@ -16,6 +16,14 @@ NOTIFICATION_CHR_UUID = "71ffb137-8b7a-47c9-9a7a-4b1b16662d9a"
 CONFIG_CHR_UUID = "e9f6e626-5fca-4201-b80c-4d2b51c40f51"
 VERSION_CHR_UUID = "b6dc9a5b-5041-4b32-9f8d-34321df8637c"
 SCAN_INTERVAL_SECS = 5
+# Hard bound on a whole scan. find_device_by_name's timeout covers detection
+# only; bleak's WinRT scanner stop() then awaits the Stopped event with no
+# timeout and can hang forever, freezing the reconnect loop.
+SCAN_HARD_TIMEOUT_SECS = SCAN_INTERVAL_SECS + 5
+# Hard bound on a single connect attempt. bleak's WinRT connect() waits for
+# the GATT session to become active outside its own 10s timeout, so an
+# attempt can likewise hang forever.
+CONNECT_HARD_TIMEOUT_SECS = 20
 # Upper bound for a single GATT read. bleak's CoreBluetooth backend has its own
 # (much longer, ~20s) read timeout, but on a stale-connected dead link that long
 # hold blocks every other GATT op behind _lock and delays reconnect. Fail fast.
@@ -68,9 +76,20 @@ class ClawdBleClient:
             await self.disconnect()
         while True:
             logger.info("Scanning for %s device...", DEVICE_NAME)
-            device = await BleakScanner.find_device_by_name(
-                DEVICE_NAME, timeout=SCAN_INTERVAL_SECS
-            )
+            try:
+                device = await asyncio.wait_for(
+                    BleakScanner.find_device_by_name(
+                        DEVICE_NAME, timeout=SCAN_INTERVAL_SECS
+                    ),
+                    timeout=SCAN_HARD_TIMEOUT_SECS,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "BLE scan did not finish within %ss (scanner stop hung); "
+                    "retrying",
+                    SCAN_HARD_TIMEOUT_SECS,
+                )
+                continue
             if device is None:
                 logger.debug("%s not found, retrying...", DEVICE_NAME)
                 continue
@@ -84,13 +103,21 @@ class ClawdBleClient:
                     disconnected_callback=self._on_disconnect,
                     winrt={"use_cached_services": False},
                 )
-                await client.connect()
+                await asyncio.wait_for(
+                    client.connect(), timeout=CONNECT_HARD_TIMEOUT_SECS
+                )
                 self._client = client
                 self._disconnect_notified = False  # re-arm for this connection
                 logger.info("Connected to %s (MTU: %d)", DEVICE_NAME, client.mtu_size)
                 if self._on_connect_cb:
                     self._on_connect_cb()
                 return
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Connection did not finish within %ss, retrying...",
+                    CONNECT_HARD_TIMEOUT_SECS,
+                )
+                await asyncio.sleep(SCAN_INTERVAL_SECS)
             except Exception as e:
                 logger.warning("Connection failed: %s, retrying...", e)
                 await asyncio.sleep(SCAN_INTERVAL_SECS)
