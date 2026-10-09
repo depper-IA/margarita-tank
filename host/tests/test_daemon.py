@@ -821,3 +821,67 @@ async def test_add_transport_replaces_live_sender_for_same_name(monkeypatch):
     finally:
         second.cancel()
         await asyncio.gather(second, return_exceptions=True)
+
+
+# --- Takeover lock acquisition ---
+
+
+def _patch_lock(monkeypatch, tmp_path, failures):
+    """Make single_instance.acquire fail ``failures`` times, then succeed.
+    Returns the call list and the sleep list."""
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    calls, sleeps = [], []
+
+    def acquire(path):
+        calls.append(path)
+        if len(calls) <= failures:
+            raise OSError("lock held")
+        return 42
+
+    monkeypatch.setattr(daemon_mod, "LOCK_PATH", tmp_path / "daemon.lock")
+    monkeypatch.setattr(daemon_mod.single_instance, "acquire", acquire)
+    monkeypatch.setattr(daemon_mod, "_stop_existing_daemon", lambda: True)
+    monkeypatch.setattr(daemon_mod.time, "sleep", sleeps.append)
+    return calls, sleeps
+
+
+def test_takeover_retries_lock_until_released(monkeypatch, tmp_path):
+    """On Windows the terminated daemon's lock is released slightly after it
+    exits, so a single immediate retry fails. Takeover must keep retrying."""
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    calls, sleeps = _patch_lock(monkeypatch, tmp_path, failures=4)
+
+    assert daemon_mod._acquire_lock(takeover=True) == 42
+    assert len(calls) == 5
+    assert sleeps and all(s == daemon_mod.LOCK_RETRY_STEP_SECS for s in sleeps)
+
+
+def test_takeover_lock_failure_is_logged_before_exit(monkeypatch, tmp_path, caplog):
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    calls, sleeps = _patch_lock(monkeypatch, tmp_path, failures=10**6)
+
+    with caplog.at_level("ERROR", logger="clawd-tank"), pytest.raises(SystemExit) as exc:
+        daemon_mod._acquire_lock(takeover=True)
+
+    assert exc.value.code == 1
+    assert sum(sleeps) == pytest.approx(daemon_mod.LOCK_TAKEOVER_TIMEOUT_SECS)
+    assert any(
+        r.levelname == "ERROR" and "Could not acquire lock" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_headless_lock_conflict_exits_without_retry(monkeypatch, tmp_path):
+    import clawd_tank_daemon.daemon as daemon_mod
+
+    calls, sleeps = _patch_lock(monkeypatch, tmp_path, failures=10**6)
+
+    with pytest.raises(SystemExit) as exc:
+        daemon_mod._acquire_lock(takeover=False)
+
+    assert exc.value.code == 0
+    assert len(calls) == 1
+    assert sleeps == []

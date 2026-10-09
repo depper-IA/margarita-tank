@@ -227,6 +227,10 @@ class ClawdTankController(DaemonObserver):
                 self._loop_ready.set()
                 self._loop.run_until_complete(self._daemon.run())
                 logger.info("Daemon thread exited normally")
+            except SystemExit as e:
+                # Not an Exception: without this, sys.exit() in the daemon
+                # (e.g. a failed takeover lock) kills the thread silently.
+                logger.error("Daemon thread exited via SystemExit (code %s)", e.code)
             except Exception:
                 logger.exception("Daemon thread crashed")
             finally:

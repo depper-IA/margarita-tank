@@ -507,3 +507,35 @@ def test_install_hooks_alerts_failure_when_settings_unparseable(prefs_path, tmp_
     assert settings_path.read_text(encoding="utf-8") == '{"model": "opus",}'
     assert controller._hooks_installed is False
     assert view.alerts[0][0] == "Hooks Not Installed"
+
+
+# --- Daemon thread death ---------------------------------------------------------
+
+
+def test_daemon_thread_logs_system_exit(prefs_path, monkeypatch, caplog):
+    """SystemExit is not an Exception: sys.exit() inside the daemon (e.g. a
+    failed takeover lock) used to kill the thread without a log line."""
+    import clawd_tank_menubar.controller as controller_mod
+
+    class ExitingDaemon:
+        def __init__(self, **kwargs):
+            pass
+
+        async def run(self):
+            raise SystemExit(1)
+
+    monkeypatch.setattr(controller_mod, "ClawdDaemon", ExitingDaemon)
+    prefs_path.write_text(json.dumps({"ble_enabled": False, "sim_enabled": False}))
+    controller, view = make_controller(prefs_path)
+
+    with caplog.at_level("ERROR"):
+        controller.start()
+        controller._daemon_thread.join(timeout=2)
+
+    assert not controller._daemon_thread.is_alive()
+    assert any(
+        r.levelname == "ERROR" and "exit" in r.getMessage().lower() and "1" in r.getMessage()
+        for r in caplog.records
+    )
+    controller.check_daemon_health()
+    assert view.renders[-1].icon == "disconnected"

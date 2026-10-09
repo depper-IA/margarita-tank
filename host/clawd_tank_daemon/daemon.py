@@ -52,6 +52,11 @@ def _tool_to_anim(tool_name: str) -> str:
 
 PID_PATH = Path.home() / ".clawd-tank" / "daemon.pid"
 LOCK_PATH = Path.home() / ".clawd-tank" / "daemon.lock"
+# After stopping the old daemon on takeover, keep retrying the lock this long.
+# On Windows the OS releases a terminated process's lock slightly after the
+# process exits, so a single immediate retry fails.
+LOCK_TAKEOVER_TIMEOUT_SECS = 3.0
+LOCK_RETRY_STEP_SECS = 0.1
 # Cache written by statusline_bridge.py holding Claude Code's rate_limits.
 USAGE_CACHE_PATH = str(Path.home() / ".clawd-tank" / "statusline-cache.json")
 # How often to poll the usage cache and push set_usage to transports.
@@ -116,16 +121,26 @@ def _acquire_lock(takeover: bool = False) -> int:
         if takeover:
             logger.info("Stopping existing daemon to take over...")
             _stop_existing_daemon()
-            # Retry the lock
-            try:
-                fd = single_instance.acquire(LOCK_PATH)
-            except OSError:
-                print("Could not acquire lock after stopping existing daemon", file=sys.stderr)
-                sys.exit(1)
+            fd = _retry_lock_after_takeover()
         else:
             print("Another clawd-tank daemon is already running", file=sys.stderr)
             sys.exit(0)
     return fd
+
+
+def _retry_lock_after_takeover() -> int:
+    """Retry the lock until LOCK_TAKEOVER_TIMEOUT_SECS; exit(1) on failure."""
+    attempts = round(LOCK_TAKEOVER_TIMEOUT_SECS / LOCK_RETRY_STEP_SECS)
+    for attempt in range(attempts + 1):
+        try:
+            return single_instance.acquire(LOCK_PATH)
+        except OSError:
+            if attempt < attempts:
+                time.sleep(LOCK_RETRY_STEP_SECS)
+    message = "Could not acquire lock after stopping existing daemon"
+    logger.error("%s (waited %ss)", message, LOCK_TAKEOVER_TIMEOUT_SECS)
+    print(message, file=sys.stderr)
+    sys.exit(1)
 
 
 class ClawdDaemon:
