@@ -26,9 +26,9 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher=Margarita Tank
-AppPublisherURL=https://github.com/depper-IA/margarita-tank
-AppSupportURL=https://github.com/depper-IA/margarita-tank/issues
-AppUpdatesURL=https://github.com/depper-IA/margarita-tank/releases
+AppPublisherURL=https://github.com/sam-wilkie/margarita-tank
+AppSupportURL=https://github.com/sam-wilkie/margarita-tank/issues
+AppUpdatesURL=https://github.com/sam-wilkie/margarita-tank/releases
 ; Per-user install into %LOCALAPPDATA%\Programs — no UAC prompt.
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\{#AppName}

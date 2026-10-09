@@ -6,7 +6,7 @@ name: Release
 #   Margarita-Tank-Setup.exe    Windows tray app (per-user Inno Setup installer)
 #
 # Asset names carry no version on purpose, so the README can link to
-# https://github.com/depper-IA/margarita-tank/releases/latest/download/<asset>.
+# https://github.com/sam-wilkie/margarita-tank/releases/latest/download/<asset>.
 #
 # Triggers:
 #   - pushing a vX.Y.Z tag (the normal flow, see .claude/skills/releasing):

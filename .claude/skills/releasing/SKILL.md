@@ -15,7 +15,7 @@ triggers on any `v*` tag push and builds, in parallel:
 
 then creates the GitHub release with both assets attached. Asset names are
 unversioned on purpose: the README links to
-`https://github.com/depper-IA/margarita-tank/releases/latest/download/<asset>`.
+`https://github.com/sam-wilkie/margarita-tank/releases/latest/download/<asset>`.
 Publishing a release from the GitHub UI runs the same workflow and attaches the
 assets to it.
 
@@ -90,7 +90,7 @@ gh release edit vX.Y.Z \
   --title "vX.Y.Z — <theme>" \
   --notes "## Highlights
 ...
-**Full changelog:** https://github.com/depper-IA/margarita-tank/compare/<prevtag>...vX.Y.Z"
+**Full changelog:** https://github.com/sam-wilkie/margarita-tank/compare/<prevtag>...vX.Y.Z"
 ```
 
 **8. Verify:**
