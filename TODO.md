@@ -24,6 +24,14 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 
 ---
 
+## BLE auto-reconnect (scan error killed the sender) — Fixed (live hardware untested)
+
+- [x] Root cause: a first-scan `BleakError` (macOS TCC check still running at app start) escaped `_connect_until_found` and ended `_transport_sender` silently. Scan errors are now retried with back-off, and `_transport_sender` restarts after a crash (logged with traceback).
+- [x] Log lines: scan failures (WARNING, first and every 6th), "not found after N scans" (INFO, every 6th).
+- [ ] Restart the installed app with the board in range and check the log: first scan may log `BLE scan failed ... retrying in 1s`, then `Found Margarita` and `Transport 'ble' connected` with no click on Reconnect.
+- [ ] Switch the board off and on (or walk out of range) and check it reconnects by itself within a few seconds.
+- [ ] Known leftover: `ClawdBleClient.disconnect()` awaits bleak's `disconnect()` with no timeout (only the manual Reconnect path uses it on a live link).
+
 ## Claude Code mod (side panel) — Implemented (Windows and a real Claude session untested)
 
 - [x] `claude-mod/margarita-band/` added to the repo and bundled (py2app `DATA_FILES`, PyInstaller `datas`; the release workflow checks both).
