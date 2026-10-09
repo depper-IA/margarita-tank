@@ -103,6 +103,10 @@ PID_DEDUP_FRESHNESS_SECONDS = 60.0
 # never reports range/sleep disconnects, so without this probe a dead link is
 # never detected and the daemon never re-scans. Detection lag ~= this interval.
 BLE_LIVENESS_INTERVAL_SECS = 20.0
+# How often to check that each session's Claude Code process is still alive. A
+# window closed with the X sends no SessionEnd, so this interval is how long its
+# crab lingers. A PID check is a cheap OS call, so keep it short.
+PID_LIVENESS_INTERVAL_SECS = 5.0
 # Sessions WITHOUT a resolvable PID (e.g. a node-hosted Claude Code on Windows,
 # where the hook finds no claude.exe ancestor) can't be pruned by the PID-liveness
 # checker. They rely entirely on time-based eviction, so they use a much
@@ -723,9 +727,10 @@ class ClawdDaemon:
         return dead
 
     async def _liveness_checker(self) -> None:
-        """Async task: every 30s, evict sessions whose Claude Code PID is gone."""
+        """Async task: every PID_LIVENESS_INTERVAL_SECS, evict sessions whose
+        Claude Code PID is gone."""
         while self._running:
-            await asyncio.sleep(30)
+            await asyncio.sleep(PID_LIVENESS_INTERVAL_SECS)
             evicted = self._check_liveness()
             if evicted:
                 await self._broadcast_display_state_if_changed()

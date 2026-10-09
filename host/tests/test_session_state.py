@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from clawd_tank_daemon.daemon import ClawdDaemon, LOW_BATTERY_USAGE_PCT, _tool_to_anim
 
@@ -1822,3 +1822,28 @@ async def test_other_cards_still_shown():
     await d._handle_message({"event": "add", "hook": "Notification", "session_id": "bbb",
                              "project": "p", "message": "Esperando tu respuesta"})
     assert {"aaa", "bbb"} <= set(d._active_notifications)
+
+
+# --- PID liveness polling cadence ---
+
+
+@pytest.mark.asyncio
+async def test_liveness_checker_polls_every_few_seconds():
+    """A Claude Code window closed with the X sends no SessionEnd; its crab is
+    removed by the PID liveness checker, so the poll interval is the delay the
+    user sees. It must stay short."""
+    from clawd_tank_daemon import daemon as daemon_mod
+
+    d = make_daemon()
+    d._running = True
+    delays = []
+
+    async def fake_sleep(secs):
+        delays.append(secs)
+        d._running = False
+
+    with patch.object(daemon_mod.asyncio, "sleep", fake_sleep):
+        await d._liveness_checker()
+
+    assert delays == [daemon_mod.PID_LIVENESS_INTERVAL_SECS]
+    assert daemon_mod.PID_LIVENESS_INTERVAL_SECS <= 5
