@@ -601,6 +601,24 @@ def test_toggle_claude_mod_off_removes_only_our_folder_and_asks_for_a_restart(pr
     assert "Restart your Claude Code sessions" in message
 
 
+def test_toggle_claude_mod_updates_the_check_before_the_blocking_alert(prefs_path):
+    # rumps.alert is modal: whatever is not rendered before it opens stays stale
+    # on screen until the user dismisses it, which reads as "the click did nothing".
+    controller, view = make_controller(prefs_path)
+    seen_at_alert = []
+    original_alert = view.alert
+
+    def alert(title, message):
+        seen_at_alert.append(view.renders[-1].claude_mod_enabled)
+        original_alert(title, message)
+
+    view.alert = alert
+    controller.toggle_claude_mod()
+    controller.toggle_claude_mod()
+
+    assert seen_at_alert == [True, False]
+
+
 def test_toggle_claude_mod_preserves_other_preference_keys(prefs_path):
     prefs_path.write_text(json.dumps({"sim_enabled": False}))
     controller, _view = make_controller(prefs_path)

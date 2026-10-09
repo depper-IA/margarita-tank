@@ -175,3 +175,18 @@ def test_windows_clicking_the_mod_item_toggles_through_the_controller(windows_vi
     item = _win_item(view, LABEL)
     item.action(item)
     assert controller.calls == ["toggle_claude_mod"]
+
+
+def test_mac_alert_brings_the_menu_bar_app_to_the_front_first(mac_view, monkeypatch):
+    # A menu-bar-only app is never the active app, so a plain modal alert opens
+    # behind the other windows and the click looks like it did nothing.
+    view, _app, rumps = mac_view
+    from clawd_tank_menubar import rumps_view
+
+    calls = []
+    monkeypatch.setattr(rumps_view, "_bring_to_front", lambda: calls.append("front"))
+    monkeypatch.setattr(rumps, "alert", lambda **kw: calls.append(("alert", kw["title"])))
+
+    view.alert(title="Claude Code Mod Enabled", message="Restart your sessions")
+
+    assert calls == ["front", ("alert", "Claude Code Mod Enabled")]

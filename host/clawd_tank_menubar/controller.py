@@ -444,6 +444,8 @@ class ClawdTankController(DaemonObserver):
                 return
             self._claude_mod_enabled = False
             save_preferences(self._prefs_path, updates={"claude_mod_enabled": False})
+            # The alert is modal: render first so the check is already right.
+            self._render()
             self._view.alert(
                 title="Claude Code Mod Disabled",
                 message=(
@@ -465,6 +467,7 @@ class ClawdTankController(DaemonObserver):
                 return
             self._claude_mod_enabled = True
             save_preferences(self._prefs_path, updates={"claude_mod_enabled": True})
+            self._render()
             self._view.alert(
                 title="Claude Code Mod Enabled",
                 message=(

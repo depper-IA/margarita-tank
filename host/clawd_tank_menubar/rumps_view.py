@@ -16,6 +16,18 @@ from .slider import create_slider_menu_item
 
 logger = logging.getLogger("clawd-tank.menubar")
 
+def _bring_to_front() -> None:
+    """Activate the app so its next modal alert shows above other windows.
+
+    A menu-bar-only app (LSUIElement) is never the active app, so without this
+    rumps.alert opens behind whatever window has focus."""
+    try:
+        from AppKit import NSApplication
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+    except Exception:
+        logger.debug("Could not activate the app before an alert", exc_info=True)
+
+
 _ICON_FILES = {
     "disconnected": "crab-disconnected",
     "connected": "crab-connected",
@@ -226,6 +238,7 @@ class RumpsTrayView:
         self._app.title = ""
 
     def alert(self, title: str, message: str) -> None:
+        _bring_to_front()
         rumps.alert(title=title, message=message)
 
     def quit(self) -> None:
