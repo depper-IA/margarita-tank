@@ -33,6 +33,9 @@ STATUSLINE_SCRIPT_PATH = CLAWD_DIR / "statusline_bridge.py"
 # The user's pre-existing statusLine, saved so the bridge can chain it and
 # uninstall can restore it exactly.
 STATUSLINE_STATE_NAME = "statusline-original.json"
+# The same saved command as plain text, written verbatim. The POSIX sh bridge
+# reads this instead of picking the string out of the JSON: it has no JSON parser.
+STATUSLINE_COMMAND_NAME = "statusline-original.txt"
 STATUSLINE_EXE_NAME = "margarita-statusline.exe"
 
 # Standalone hook script — uses only Python stdlib, no external imports.
@@ -417,6 +420,89 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
         except Exception:
             pass
         sys.exit(0)
+''')
+
+
+# The same bridge for macOS and Linux, in plain POSIX sh. The Python one above
+# needs a working python3, and a Mac may have none (or only the Xcode command
+# line tools stub): a statusLine that cannot start would take the user's own
+# status line down with it. Windows keeps the Python bridge (margarita-statusline.exe).
+STATUSLINE_BRIDGE_SH = textwrap.dedent('''\
+    #!/bin/sh
+    # statusline_bridge - Claude Code statusLine wrapper for Clawd Tank (macOS, Linux).
+    #
+    # Claude Code pipes a JSON document (including rate_limits) to the statusLine
+    # command on every refresh. This script caches that JSON for the daemon's usage
+    # bar, then runs the user's original statusLine command (saved verbatim by the
+    # installer in statusline-original.txt) with the same stdin and prints its
+    # output, so their status line keeps working.
+    #
+    # POSIX sh plus cat, mkdir, mv, rm and sleep: no Python and no jq. It must never
+    # fail loudly: stderr is discarded and the exit code is always 0.
+    #
+    # Limits: the original is stopped with SIGTERM after CLAWD_TANK_STATUSLINE_TIMEOUT
+    # seconds (default 10), together with its direct children when pgrep exists; a
+    # deeper process tree can outlive it. The input is held in a shell variable, so
+    # NUL bytes are dropped (a JSON document has none).
+    # STATUSLINE_BRIDGE_VERSION: 1
+
+    exec 2>/dev/null
+
+    DIR=${CLAWD_TANK_DIR:-${HOME:+$HOME/.clawd-tank}}
+    CACHE="$DIR/statusline-cache.json"
+    SAVED="$DIR/statusline-original.txt"
+    TIMEOUT=${CLAWD_TANK_STATUSLINE_TIMEOUT:-10}
+    case $TIMEOUT in ''|.|*[!0-9.]*) TIMEOUT=10 ;; esac
+
+    # Everything Claude Code sent, byte for byte (the x keeps the trailing newlines).
+    INPUT=$(cat; printf x)
+    INPUT=${INPUT%x}
+
+    write_cache() {
+        [ -n "$DIR" ] || return 0
+        # Only a JSON object is cached: its first non-blank character is a brace.
+        lead=${INPUT%%[![:space:]]*}
+        case ${INPUT#"$lead"} in '{'*) ;; *) return 0 ;; esac
+        [ ! -d "$CACHE" ] || return 0
+        mkdir -p "$DIR" || return 0
+        tmp="$CACHE.$$.tmp"
+        # A temp file in the same folder and mv replace the cache atomically; the
+        # umask keeps it private to the user.
+        if ( umask 077 && printf '%s' "$INPUT" >"$tmp" ) && mv -f "$tmp" "$CACHE"; then
+            :
+        else
+            rm -f "$tmp"
+        fi
+    }
+
+    run_original() {
+        # The payload arrives on stdin; a background job would get /dev/null.
+        exec 3<&0
+        CLAWD_TANK_STATUSLINE_BRIDGE=1 /bin/sh -c "$COMMAND" <&3 3<&- &
+        child=$!
+        (
+            trap 'kill "$sleeper"; exit 0' TERM
+            sleep "$TIMEOUT" &
+            sleeper=$!
+            wait "$sleeper"
+            # Note the children first: once the parent dies they are re-parented.
+            kids=$(pgrep -P "$child")
+            kill "$child" $kids
+        ) >/dev/null 2>&1 3<&- </dev/null &
+        watchdog=$!
+        wait "$child"
+        kill "$watchdog"
+    }
+
+    write_cache
+
+    # A bridge that finds itself as the "original" would fork forever.
+    [ -z "$CLAWD_TANK_STATUSLINE_BRIDGE" ] || exit 0
+    [ -n "$DIR" ] && [ -r "$SAVED" ] || exit 0
+    COMMAND=$(cat "$SAVED")
+    case $COMMAND in *[![:space:]]*) ;; *) exit 0 ;; esac
+    printf '%s' "$INPUT" | run_original
+    exit 0
 ''')
 
 NOTIFY_EXE_NAME = "margarita-notify.exe"
