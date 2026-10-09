@@ -608,8 +608,11 @@ def _wire_statusline(settings: dict) -> None:
 
 
 def _unwire_statusline(settings: dict) -> bool:
-    """Undo _wire_statusline(). Returns True if settings changed. A statusLine
-    that is not ours (the user replaced it after install) is left alone."""
+    """Undo _wire_statusline() in `settings`. Returns True if settings changed. A
+    statusLine that is not ours (the user replaced it after install) is left alone.
+
+    The saved original is NOT deleted here: the caller removes it only after the
+    settings file was written, so a failed write cannot lose the original."""
     state_path = _statusline_state_path()
     if not _statusline_is_ours(settings.get("statusLine")):
         return False
@@ -622,7 +625,6 @@ def _unwire_statusline(settings: dict) -> bool:
         del settings["statusLine"]
     else:
         settings["statusLine"] = original
-    state_path.unlink(missing_ok=True)
     return True
 
 
@@ -854,7 +856,8 @@ def uninstall_hooks() -> bool:
         )
         return False
 
-    changed = _unwire_statusline(settings)
+    is_unwired = _unwire_statusline(settings)
+    changed = is_unwired
 
     hooks = settings.get("hooks")
     if isinstance(hooks, dict):
@@ -878,5 +881,7 @@ def uninstall_hooks() -> bool:
         return True
 
     _write_settings_atomic(settings)
+    if is_unwired:
+        _statusline_state_path().unlink(missing_ok=True)
     logger.info("Uninstalled hooks from %s", CLAUDE_SETTINGS_PATH)
     return True

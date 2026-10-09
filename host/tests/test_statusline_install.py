@@ -168,6 +168,19 @@ def test_uninstall_without_state_file_drops_our_statusline(settings_path, state_
     assert "statusLine" not in _read(settings_path)
 
 
+def test_uninstall_keeps_state_when_the_settings_write_fails(settings_path, state_path, monkeypatch):
+    _write(settings_path, {"statusLine": USER_STATUSLINE})
+    hooks.install_hooks()
+
+    def boom(_settings):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(hooks, "_write_settings_atomic", boom)
+    with pytest.raises(OSError):
+        hooks.uninstall_hooks()
+    assert _read(state_path) == {"statusLine": USER_STATUSLINE}
+
+
 def test_uninstall_is_idempotent(settings_path):
     _write(settings_path, {"statusLine": USER_STATUSLINE})
     hooks.install_hooks()
