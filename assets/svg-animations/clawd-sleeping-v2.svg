@@ -106,15 +106,15 @@
         76.3889% { transform: translate(0px, 6px); }
       }
       @keyframes sl-blush {
-        0% { transform: translate(0px, 5px); }
-        6.9444% { transform: translate(0px, 4px); }
-        12.5% { transform: translate(0px, 3px); }
-        20.8333% { transform: translate(0px, 4px); }
-        26.3889% { transform: translate(0px, 5px); }
-        56.9444% { transform: translate(0px, 4px); }
-        62.5% { transform: translate(0px, 3px); }
-        70.8333% { transform: translate(0px, 4px); }
-        76.3889% { transform: translate(0px, 5px); }
+        0% { transform: translate(0px, 6px); }
+        6.9444% { transform: translate(0px, 5px); }
+        12.5% { transform: translate(0px, 4px); }
+        20.8333% { transform: translate(0px, 5px); }
+        26.3889% { transform: translate(0px, 6px); }
+        56.9444% { transform: translate(0px, 5px); }
+        62.5% { transform: translate(0px, 4px); }
+        70.8333% { transform: translate(0px, 5px); }
+        76.3889% { transform: translate(0px, 6px); }
       }
       @keyframes zm0 {
         0% { transform: translate(0px, 0px); }
@@ -285,7 +285,8 @@
     </g>
     <!-- blush patches -->
     <g id="blush">
-      <path fill="#EA7C7E" d="M6 21h2v1h-2zM22 21h2v1h-2z"/>
+      <path fill="#EA7C7E" d="M7 20h2v1h-2zM21 20h2v1h-2zM6 21h1v1h-1zM9 21h1v1h-1zM20 21h1v1h-1zM23 21h1v1h-1zM7 22h2v1h-2zM21 22h2v1h-2z"/>
+      <path fill="#F7A3A1" d="M7 21h2v1h-2zM21 21h2v1h-2z"/>
     </g>
     <!-- flattened sleeping body, 10 px tall -->
     <g id="torso-sploot-10">
@@ -297,13 +298,17 @@
     </g>
     <!-- left pincer flat on the ground (10 px body) -->
     <g id="arm-sploot-l-10">
-      <path fill="#DE886D" d="M2 26h1v1h-1zM0 27h3v2h-3z"/>
-      <path fill="#6B3122" d="M-2 26h4v1h-4zM-1 27h1v2h-1zM-2 29h4v1h-4z"/>
+      <path fill="#B8644B" d="M-2 23h1v1h-1zM-1 24h1v1h-1zM-2 28h5v1h-5z"/>
+      <path fill="#DE886D" d="M0 24h3v4h-3z"/>
+      <path fill="#F3AC90" d="M-1 23h4v1h-4zM-1 27h1v1h-1z"/>
+      <path fill="#6B3122" d="M-2 22h5v1h-5zM-3 23h1v1h-1zM-3 24h2v1h-2zM-1 25h1v2h-1zM-3 27h2v1h-2zM-3 28h1v1h-1zM-2 29h5v1h-5z"/>
     </g>
     <!-- right pincer flat on the ground (10 px body) -->
     <g id="arm-sploot-r-10">
-      <path fill="#DE886D" d="M27 26h1v1h-1zM27 27h3v2h-3z"/>
-      <path fill="#6B3122" d="M28 26h4v1h-4zM30 27h1v2h-1zM28 29h4v1h-4z"/>
+      <path fill="#F3AC90" d="M27 23h4v1h-4zM30 27h1v1h-1z"/>
+      <path fill="#DE886D" d="M27 24h3v4h-3z"/>
+      <path fill="#B8644B" d="M31 23h1v1h-1zM30 24h1v1h-1zM27 28h5v1h-5z"/>
+      <path fill="#6B3122" d="M27 22h5v1h-5zM32 23h1v1h-1zM31 24h2v1h-2zM30 25h1v2h-1zM31 27h2v1h-2zM32 28h1v1h-1zM27 29h5v1h-5z"/>
     </g>
     <!-- flattened sleeping body, 11 px tall -->
     <g id="torso-sploot-11">
@@ -315,13 +320,17 @@
     </g>
     <!-- left pincer flat on the ground (11 px body) -->
     <g id="arm-sploot-l-11">
-      <path fill="#DE886D" d="M2 26h1v1h-1zM0 27h3v2h-3z"/>
-      <path fill="#6B3122" d="M-2 26h4v1h-4zM-1 27h1v2h-1zM-2 29h4v1h-4z"/>
+      <path fill="#B8644B" d="M-2 23h1v1h-1zM-1 24h1v1h-1zM-2 28h5v1h-5z"/>
+      <path fill="#DE886D" d="M0 24h3v4h-3z"/>
+      <path fill="#F3AC90" d="M-1 23h4v1h-4zM-1 27h1v1h-1z"/>
+      <path fill="#6B3122" d="M-2 22h5v1h-5zM-3 23h1v1h-1zM-3 24h2v1h-2zM-1 25h1v2h-1zM-3 27h2v1h-2zM-3 28h1v1h-1zM-2 29h5v1h-5z"/>
     </g>
     <!-- right pincer flat on the ground (11 px body) -->
     <g id="arm-sploot-r-11">
-      <path fill="#DE886D" d="M27 26h1v1h-1zM27 27h3v2h-3z"/>
-      <path fill="#6B3122" d="M28 26h4v1h-4zM30 27h1v2h-1zM28 29h4v1h-4z"/>
+      <path fill="#F3AC90" d="M27 23h4v1h-4zM30 27h1v1h-1z"/>
+      <path fill="#DE886D" d="M27 24h3v4h-3z"/>
+      <path fill="#B8644B" d="M31 23h1v1h-1zM30 24h1v1h-1zM27 28h5v1h-5z"/>
+      <path fill="#6B3122" d="M27 22h5v1h-5zM32 23h1v1h-1zM31 24h2v1h-2zM30 25h1v2h-1zM31 27h2v1h-2zM32 28h1v1h-1zM27 29h5v1h-5z"/>
     </g>
     <!-- flattened sleeping body, 12 px tall -->
     <g id="torso-sploot-12">
@@ -333,13 +342,17 @@
     </g>
     <!-- left pincer flat on the ground (12 px body) -->
     <g id="arm-sploot-l-12">
-      <path fill="#DE886D" d="M2 26h1v1h-1zM0 27h3v2h-3z"/>
-      <path fill="#6B3122" d="M-2 26h4v1h-4zM-1 27h1v2h-1zM-2 29h4v1h-4z"/>
+      <path fill="#B8644B" d="M-2 23h1v1h-1zM-1 24h1v1h-1zM-2 28h5v1h-5z"/>
+      <path fill="#DE886D" d="M0 24h3v4h-3z"/>
+      <path fill="#F3AC90" d="M-1 23h4v1h-4zM-1 27h1v1h-1z"/>
+      <path fill="#6B3122" d="M-2 22h5v1h-5zM-3 23h1v1h-1zM-3 24h2v1h-2zM-1 25h1v2h-1zM-3 27h2v1h-2zM-3 28h1v1h-1zM-2 29h5v1h-5z"/>
     </g>
     <!-- right pincer flat on the ground (12 px body) -->
     <g id="arm-sploot-r-12">
-      <path fill="#DE886D" d="M27 26h1v1h-1zM27 27h3v2h-3z"/>
-      <path fill="#6B3122" d="M28 26h4v1h-4zM30 27h1v2h-1zM28 29h4v1h-4z"/>
+      <path fill="#F3AC90" d="M27 23h4v1h-4zM30 27h1v1h-1z"/>
+      <path fill="#DE886D" d="M27 24h3v4h-3z"/>
+      <path fill="#B8644B" d="M31 23h1v1h-1zM30 24h1v1h-1zM27 28h5v1h-5z"/>
+      <path fill="#6B3122" d="M27 22h5v1h-5zM32 23h1v1h-1zM31 24h2v1h-2zM30 25h1v2h-1zM31 27h2v1h-2zM32 28h1v1h-1zM27 29h5v1h-5z"/>
     </g>
     <!-- leg 1 sticking up behind the sleeping body -->
     <g id="leg-up1">

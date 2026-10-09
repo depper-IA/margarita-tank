@@ -22,7 +22,7 @@
         93.2292% { transform: translate(0px, 0px); }
       }
       @keyframes ar-l {
-        0% { transform: translate(2px, -2px); }
+        0% { transform: translate(0px, -2px); }
       }
       @keyframes dsh {
         0% { transform: translate(-4px, 0px); }
@@ -505,15 +505,19 @@
       <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
       <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
     </g>
-    <!-- right pincer fused with the body (rest position only) -->
-    <g id="arm-r">
-      <path fill="#6B3122" d="M26 18h4v1h-4zM28 19h1v2h-1zM26 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M25 18h1v1h-1zM25 19h3v2h-3zM25 21h1v1h-1z"/>
+    <!-- left pincer fused with the body (rest spot and sliding along the body side) -->
+    <g id="arm-l">
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h4v1h-4zM1 20h1v1h-1z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h5v1h-5z"/>
+      <path fill="#DE886D" d="M2 17h3v4h-3z"/>
     </g>
-    <!-- left pincer with a closed outline (any position) -->
-    <g id="arm-l-free">
-      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM3 19h1v2h-1zM0 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M2 19h1v2h-1z"/>
+    <!-- right pincer fused with the body (rest spot and sliding along the body side) -->
+    <g id="arm-r">
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM25 21h5v1h-5z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M25 16h4v1h-4zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M25 17h3v4h-3z"/>
     </g>
     <!-- left squinted eye alone -->
     <g id="eye-l-squint">
@@ -553,7 +557,7 @@
     <g class="hunch">
     <use href="#torso"/>
     <g class="ar-l">
-    <use href="#arm-l-free"/>
+    <use href="#arm-l"/>
     </g>
     <use href="#eye-l-squint"/>
     <use href="#arm-r"/>

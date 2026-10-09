@@ -3,20 +3,46 @@
   <defs>
     <style>
       .ar-l { animation: ar-l 2s infinite step-end; }
+      .ar-l-k0 { animation: ar-l-k0 2s infinite step-end; }
+      .ar-l-k1 { animation: ar-l-k1 2s infinite step-end; }
+      .ar-l-k2 { animation: ar-l-k2 2s infinite step-end; }
       .ey-wide { animation: ey-wide 2s infinite step-end; }
       .ey-shut { animation: ey-shut 2s infinite step-end; }
       .bang { animation: bang 2s infinite step-end; }
       .bub { animation: bub 2s infinite step-end; }
       .leg4 { animation: leg4 2s infinite step-end; }
       @keyframes ar-l {
-        0% { transform: translate(-2px, -6px); }
-        9.375% { transform: translate(0px, -6px); }
-        21.875% { transform: translate(-2px, -6px); }
-        34.375% { transform: translate(0px, -6px); }
-        46.875% { transform: translate(-2px, -6px); }
-        59.375% { transform: translate(0px, -6px); }
-        71.875% { transform: translate(-2px, -6px); }
-        84.375% { transform: translate(0px, -6px); }
+        0% { transform: translate(-5px, -6px); }
+        9.375% { transform: translate(-3px, -7px); }
+        21.875% { transform: translate(-1px, -6px); }
+        34.375% { transform: translate(-3px, -7px); }
+        46.875% { transform: translate(-5px, -6px); }
+        59.375% { transform: translate(-3px, -7px); }
+        71.875% { transform: translate(-1px, -6px); }
+        84.375% { transform: translate(-3px, -7px); }
+      }
+      @keyframes ar-l-k0 {
+        0% { opacity: 1; }
+        9.375% { opacity: 0; }
+        46.875% { opacity: 1; }
+        59.375% { opacity: 0; }
+      }
+      @keyframes ar-l-k1 {
+        0% { opacity: 0; }
+        9.375% { opacity: 1; }
+        21.875% { opacity: 0; }
+        34.375% { opacity: 1; }
+        46.875% { opacity: 0; }
+        59.375% { opacity: 1; }
+        71.875% { opacity: 0; }
+        84.375% { opacity: 1; }
+      }
+      @keyframes ar-l-k2 {
+        0% { opacity: 0; }
+        21.875% { opacity: 1; }
+        34.375% { opacity: 0; }
+        71.875% { opacity: 1; }
+        84.375% { opacity: 0; }
       }
       @keyframes ey-wide {
         0% { opacity: 1; }
@@ -85,15 +111,19 @@
       <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
       <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
     </g>
-    <!-- right pincer fused with the body (rest position only) -->
+    <!-- right pincer fused with the body (rest spot and sliding along the body side) -->
     <g id="arm-r">
-      <path fill="#6B3122" d="M26 18h4v1h-4zM28 19h1v2h-1zM26 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M25 18h1v1h-1zM25 19h3v2h-3zM25 21h1v1h-1z"/>
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM25 21h5v1h-5z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M25 16h4v1h-4zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M25 17h3v4h-3z"/>
     </g>
-    <!-- left pincer with a closed outline (any position) -->
+    <!-- left pincer, closed outline (any position) -->
     <g id="arm-l-free">
-      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM3 19h1v2h-1zM0 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M2 19h1v2h-1z"/>
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM4 16h1v6h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h3v1h-3zM1 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M2 17h2v4h-2z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h4v1h-4z"/>
     </g>
     <!-- eyes 2x5, wide open -->
     <g id="eyes-wide">
@@ -106,7 +136,8 @@
     </g>
     <!-- blush patches -->
     <g id="blush">
-      <path fill="#EA7C7E" d="M6 21h2v1h-2zM22 21h2v1h-2z"/>
+      <path fill="#EA7C7E" d="M7 20h2v1h-2zM21 20h2v1h-2zM6 21h1v1h-1zM9 21h1v1h-1zM20 21h1v1h-1zM23 21h1v1h-1zM7 22h2v1h-2zM21 22h2v1h-2z"/>
+      <path fill="#F7A3A1" d="M7 21h2v1h-2zM21 21h2v1h-2z"/>
     </g>
     <!-- small smile -->
     <g id="smile">
@@ -132,6 +163,30 @@
     <use href="#torso"/>
     <g class="ar-l">
     <use href="#arm-l-free"/>
+    </g>
+    <g class="ar-l-k0">
+    <g>
+      <path fill="#6B3122" d="M-1 13h7v1h-7zM-1 18h7v1h-7z"/>
+      <path fill="#F3AC90" d="M-1 14h7v1h-7z"/>
+      <path fill="#DE886D" d="M-1 15h7v2h-7z"/>
+      <path fill="#B8644B" d="M-1 17h7v1h-7z"/>
+    </g>
+    </g>
+    <g class="ar-l-k1">
+    <g>
+      <path fill="#6B3122" d="M1 13h5v1h-5zM1 18h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 14h5v1h-5z"/>
+      <path fill="#DE886D" d="M1 15h5v2h-5z"/>
+      <path fill="#B8644B" d="M1 17h5v1h-5z"/>
+    </g>
+    </g>
+    <g class="ar-l-k2">
+    <g>
+      <path fill="#6B3122" d="M3 13h3v1h-3zM3 18h3v1h-3z"/>
+      <path fill="#F3AC90" d="M3 14h3v1h-3z"/>
+      <path fill="#DE886D" d="M3 15h3v2h-3z"/>
+      <path fill="#B8644B" d="M3 17h3v1h-3z"/>
+    </g>
     </g>
     <use href="#arm-r"/>
     <g class="ey-wide">

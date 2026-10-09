@@ -16,6 +16,8 @@
       .sv2 { animation: sv2 1s infinite step-end; }
       .swm { animation: swm 1s infinite step-end; }
       .swv { animation: swv 1s infinite step-end; }
+      .ar-r-a { animation: ar-r-a 1s infinite step-end; }
+      .ar-r-f { animation: ar-r-f 1s infinite step-end; }
       .ar-r { animation: ar-r 1s infinite step-end; }
       .ey-open { animation: ey-open 1s infinite step-end; }
       .ey-wide { animation: ey-wide 1s infinite step-end; }
@@ -107,6 +109,16 @@
         6.25% { opacity: 1; }
         68.75% { opacity: 0; }
       }
+      @keyframes ar-r-a {
+        0% { opacity: 1; }
+        43.75% { opacity: 0; }
+        56.25% { opacity: 1; }
+      }
+      @keyframes ar-r-f {
+        0% { opacity: 0; }
+        43.75% { opacity: 1; }
+        56.25% { opacity: 0; }
+      }
       @keyframes ar-r {
         0% { transform: translate(0px, 0px); }
         6.25% { transform: translate(0px, -2px); }
@@ -177,15 +189,26 @@
       <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
       <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
     </g>
-    <!-- left pincer fused with the body (rest position only) -->
+    <!-- left pincer fused with the body (rest spot and sliding along the body side) -->
     <g id="arm-l">
-      <path fill="#DE886D" d="M4 18h1v1h-1zM2 19h3v2h-3zM4 21h1v1h-1z"/>
-      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM0 21h4v1h-4z"/>
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h4v1h-4zM1 20h1v1h-1z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h5v1h-5z"/>
+      <path fill="#DE886D" d="M2 17h3v4h-3z"/>
     </g>
-    <!-- right pincer fused with the body (rest position only) -->
+    <!-- right pincer fused with the body (rest spot and sliding along the body side) -->
     <g id="arm-r">
-      <path fill="#6B3122" d="M26 18h4v1h-4zM28 19h1v2h-1zM26 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M25 18h1v1h-1zM25 19h3v2h-3zM25 21h1v1h-1z"/>
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM25 21h5v1h-5z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M25 16h4v1h-4zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M25 17h3v4h-3z"/>
+    </g>
+    <!-- right pincer, closed outline (any position) -->
+    <g id="arm-r-free">
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM26 21h4v1h-4z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM25 16h1v6h-1zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M26 16h3v1h-3zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M26 17h2v4h-2z"/>
     </g>
     <!-- eyes 2x4 with a white highlight -->
     <g id="eyes-open">
@@ -258,7 +281,12 @@
     <use href="#torso"/>
     <use href="#arm-l"/>
     <g class="ar-r">
+    <g class="ar-r-a">
     <use href="#arm-r"/>
+    </g>
+    <g class="ar-r-f">
+    <use href="#arm-r-free"/>
+    </g>
     </g>
     <g class="ey-open">
     <use href="#eyes-open"/>

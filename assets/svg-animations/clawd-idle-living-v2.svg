@@ -13,9 +13,21 @@
       .ar-l-a { animation: ar-l-a 16s infinite step-end; }
       .ar-l-f { animation: ar-l-f 16s infinite step-end; }
       .ar-l { animation: ar-l 16s infinite step-end; }
+      .ar-l-k0 { animation: ar-l-k0 16s infinite step-end; }
+      .ar-l-k1 { animation: ar-l-k1 16s infinite step-end; }
+      .ar-l-k2 { animation: ar-l-k2 16s infinite step-end; }
+      .ar-l-k3 { animation: ar-l-k3 16s infinite step-end; }
+      .ar-l-k4 { animation: ar-l-k4 16s infinite step-end; }
+      .ar-l-k5 { animation: ar-l-k5 16s infinite step-end; }
       .ar-r-a { animation: ar-r-a 16s infinite step-end; }
       .ar-r-f { animation: ar-r-f 16s infinite step-end; }
       .ar-r { animation: ar-r 16s infinite step-end; }
+      .ar-r-k0 { animation: ar-r-k0 16s infinite step-end; }
+      .ar-r-k1 { animation: ar-r-k1 16s infinite step-end; }
+      .ar-r-k2 { animation: ar-r-k2 16s infinite step-end; }
+      .ar-r-k3 { animation: ar-r-k3 16s infinite step-end; }
+      .ar-r-k4 { animation: ar-r-k4 16s infinite step-end; }
+      .ar-r-k5 { animation: ar-r-k5 16s infinite step-end; }
       .ey-open { animation: ey-open 16s infinite step-end; }
       .ey-shut { animation: ey-shut 16s infinite step-end; }
       .ey-look { animation: ey-look 16s infinite step-end; }
@@ -79,14 +91,14 @@
       @keyframes ar-l-a {
         0% { opacity: 1; }
         29.6875% { opacity: 0; }
-        38.0208% { opacity: 1; }
+        36.9792% { opacity: 1; }
         59.8958% { opacity: 0; }
         70.3125% { opacity: 1; }
       }
       @keyframes ar-l-f {
         0% { opacity: 0; }
         29.6875% { opacity: 1; }
-        38.0208% { opacity: 0; }
+        36.9792% { opacity: 0; }
         59.8958% { opacity: 1; }
         70.3125% { opacity: 0; }
       }
@@ -99,7 +111,7 @@
         33.8542% { transform: translate(1px, -5px); }
         34.8958% { transform: translate(3px, -8px); }
         35.9375% { transform: translate(1px, -5px); }
-        36.9792% { transform: translate(1px, -2px); }
+        36.9792% { transform: translate(0px, -2px); }
         38.0208% { transform: translate(0px, 0px); }
         59.8958% { transform: translate(-1px, -3px); }
         60.9375% { transform: translate(-2px, -4px); }
@@ -112,6 +124,38 @@
         70.3125% { transform: translate(0px, 2px); }
         73.4375% { transform: translate(0px, 1px); }
         74.4792% { transform: translate(0px, 0px); }
+      }
+      @keyframes ar-l-k0 {
+        0% { opacity: 0; }
+        64.0625% { opacity: 1; }
+        67.1875% { opacity: 0; }
+      }
+      @keyframes ar-l-k1 {
+        0% { opacity: 0; }
+        63.0208% { opacity: 1; }
+        64.0625% { opacity: 0; }
+        67.1875% { opacity: 1; }
+        68.2292% { opacity: 0; }
+      }
+      @keyframes ar-l-k2 {
+        0% { opacity: 0; }
+        60.9375% { opacity: 1; }
+        63.0208% { opacity: 0; }
+      }
+      @keyframes ar-l-k3 {
+        0% { opacity: 0; }
+        68.2292% { opacity: 1; }
+        69.2708% { opacity: 0; }
+      }
+      @keyframes ar-l-k4 {
+        0% { opacity: 0; }
+        59.8958% { opacity: 1; }
+        60.9375% { opacity: 0; }
+      }
+      @keyframes ar-l-k5 {
+        0% { opacity: 0; }
+        69.2708% { opacity: 1; }
+        70.3125% { opacity: 0; }
       }
       @keyframes ar-r-a {
         0% { opacity: 1; }
@@ -136,6 +180,38 @@
         70.3125% { transform: translate(0px, 2px); }
         73.4375% { transform: translate(0px, 1px); }
         74.4792% { transform: translate(0px, 0px); }
+      }
+      @keyframes ar-r-k0 {
+        0% { opacity: 0; }
+        59.8958% { opacity: 1; }
+        60.9375% { opacity: 0; }
+      }
+      @keyframes ar-r-k1 {
+        0% { opacity: 0; }
+        69.2708% { opacity: 1; }
+        70.3125% { opacity: 0; }
+      }
+      @keyframes ar-r-k2 {
+        0% { opacity: 0; }
+        60.9375% { opacity: 1; }
+        63.0208% { opacity: 0; }
+      }
+      @keyframes ar-r-k3 {
+        0% { opacity: 0; }
+        68.2292% { opacity: 1; }
+        69.2708% { opacity: 0; }
+      }
+      @keyframes ar-r-k4 {
+        0% { opacity: 0; }
+        63.0208% { opacity: 1; }
+        64.0625% { opacity: 0; }
+        67.1875% { opacity: 1; }
+        68.2292% { opacity: 0; }
+      }
+      @keyframes ar-r-k5 {
+        0% { opacity: 0; }
+        64.0625% { opacity: 1; }
+        67.1875% { opacity: 0; }
       }
       @keyframes ey-open {
         0% { opacity: 1; }
@@ -252,25 +328,33 @@
       <path fill="#F3AC90" d="M5 13h19v1h-19zM5 14h1v9h-1z"/>
       <path fill="#FFD3C2" d="M6 14h2v1h-2z"/>
     </g>
-    <!-- left pincer fused with the body (rest position only) -->
+    <!-- left pincer fused with the body (rest spot and sliding along the body side) -->
     <g id="arm-l">
-      <path fill="#DE886D" d="M4 18h1v1h-1zM2 19h3v2h-3zM4 21h1v1h-1z"/>
-      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM0 21h4v1h-4z"/>
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h4v1h-4zM1 20h1v1h-1z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h5v1h-5z"/>
+      <path fill="#DE886D" d="M2 17h3v4h-3z"/>
     </g>
-    <!-- right pincer fused with the body (rest position only) -->
+    <!-- right pincer fused with the body (rest spot and sliding along the body side) -->
     <g id="arm-r">
-      <path fill="#6B3122" d="M26 18h4v1h-4zM28 19h1v2h-1zM26 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M25 18h1v1h-1zM25 19h3v2h-3zM25 21h1v1h-1z"/>
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM25 21h5v1h-5z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M25 16h4v1h-4zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M25 17h3v4h-3z"/>
     </g>
-    <!-- left pincer with a closed outline (any position) -->
+    <!-- left pincer, closed outline (any position) -->
     <g id="arm-l-free">
-      <path fill="#6B3122" d="M0 18h4v1h-4zM1 19h1v2h-1zM3 19h1v2h-1zM0 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M2 19h1v2h-1z"/>
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM4 16h1v6h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h3v1h-3zM1 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M2 17h2v4h-2z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h4v1h-4z"/>
     </g>
-    <!-- right pincer with a closed outline (any position) -->
+    <!-- right pincer, closed outline (any position) -->
     <g id="arm-r-free">
-      <path fill="#6B3122" d="M26 18h4v1h-4zM26 19h1v2h-1zM28 19h1v2h-1zM26 21h4v1h-4z"/>
-      <path fill="#DE886D" d="M27 19h1v2h-1z"/>
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM26 21h4v1h-4z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM25 16h1v6h-1zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M26 16h3v1h-3zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M26 17h2v4h-2z"/>
     </g>
     <!-- eyes 2x4 with a white highlight -->
     <g id="eyes-open">
@@ -319,12 +403,108 @@
     <use href="#arm-l-free"/>
     </g>
     </g>
+    <g class="ar-l-k0">
+    <g>
+      <path fill="#6B3122" d="M0 13h6v1h-6zM0 18h6v1h-6z"/>
+      <path fill="#F3AC90" d="M0 14h6v1h-6z"/>
+      <path fill="#DE886D" d="M0 15h6v2h-6z"/>
+      <path fill="#B8644B" d="M0 17h6v1h-6z"/>
+    </g>
+    </g>
+    <g class="ar-l-k1">
+    <g>
+      <path fill="#6B3122" d="M1 13h5v1h-5zM1 18h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 14h5v1h-5z"/>
+      <path fill="#DE886D" d="M1 15h5v2h-5z"/>
+      <path fill="#B8644B" d="M1 17h5v1h-5z"/>
+    </g>
+    </g>
+    <g class="ar-l-k2">
+    <g>
+      <path fill="#6B3122" d="M2 13h4v1h-4zM2 18h4v1h-4z"/>
+      <path fill="#F3AC90" d="M2 14h4v1h-4z"/>
+      <path fill="#DE886D" d="M2 15h4v2h-4z"/>
+      <path fill="#B8644B" d="M2 17h4v1h-4z"/>
+    </g>
+    </g>
+    <g class="ar-l-k3">
+    <g>
+      <path fill="#6B3122" d="M2 14h4v1h-4zM2 19h4v1h-4z"/>
+      <path fill="#F3AC90" d="M2 15h4v1h-4z"/>
+      <path fill="#DE886D" d="M2 16h4v2h-4z"/>
+      <path fill="#B8644B" d="M2 18h4v1h-4z"/>
+    </g>
+    </g>
+    <g class="ar-l-k4">
+    <g>
+      <path fill="#6B3122" d="M3 13h3v1h-3zM3 18h3v1h-3z"/>
+      <path fill="#F3AC90" d="M3 14h3v1h-3z"/>
+      <path fill="#DE886D" d="M3 15h3v2h-3z"/>
+      <path fill="#B8644B" d="M3 17h3v1h-3z"/>
+    </g>
+    </g>
+    <g class="ar-l-k5">
+    <g>
+      <path fill="#6B3122" d="M3 16h3v1h-3zM3 21h3v1h-3z"/>
+      <path fill="#F3AC90" d="M3 17h3v1h-3z"/>
+      <path fill="#DE886D" d="M3 18h3v2h-3z"/>
+      <path fill="#B8644B" d="M3 20h3v1h-3z"/>
+    </g>
+    </g>
     <g class="ar-r">
     <g class="ar-r-a">
     <use href="#arm-r"/>
     </g>
     <g class="ar-r-f">
     <use href="#arm-r-free"/>
+    </g>
+    </g>
+    <g class="ar-r-k0">
+    <g>
+      <path fill="#6B3122" d="M24 13h3v1h-3zM24 18h3v1h-3z"/>
+      <path fill="#F3AC90" d="M24 14h3v1h-3z"/>
+      <path fill="#DE886D" d="M24 15h3v2h-3z"/>
+      <path fill="#B8644B" d="M24 17h3v1h-3z"/>
+    </g>
+    </g>
+    <g class="ar-r-k1">
+    <g>
+      <path fill="#6B3122" d="M24 16h3v1h-3zM24 21h3v1h-3z"/>
+      <path fill="#F3AC90" d="M24 17h3v1h-3z"/>
+      <path fill="#DE886D" d="M24 18h3v2h-3z"/>
+      <path fill="#B8644B" d="M24 20h3v1h-3z"/>
+    </g>
+    </g>
+    <g class="ar-r-k2">
+    <g>
+      <path fill="#6B3122" d="M24 13h4v1h-4zM24 18h4v1h-4z"/>
+      <path fill="#F3AC90" d="M24 14h4v1h-4z"/>
+      <path fill="#DE886D" d="M24 15h4v2h-4z"/>
+      <path fill="#B8644B" d="M24 17h4v1h-4z"/>
+    </g>
+    </g>
+    <g class="ar-r-k3">
+    <g>
+      <path fill="#6B3122" d="M24 14h4v1h-4zM24 19h4v1h-4z"/>
+      <path fill="#F3AC90" d="M24 15h4v1h-4z"/>
+      <path fill="#DE886D" d="M24 16h4v2h-4z"/>
+      <path fill="#B8644B" d="M24 18h4v1h-4z"/>
+    </g>
+    </g>
+    <g class="ar-r-k4">
+    <g>
+      <path fill="#6B3122" d="M24 13h5v1h-5zM24 18h5v1h-5z"/>
+      <path fill="#F3AC90" d="M24 14h5v1h-5z"/>
+      <path fill="#DE886D" d="M24 15h5v2h-5z"/>
+      <path fill="#B8644B" d="M24 17h5v1h-5z"/>
+    </g>
+    </g>
+    <g class="ar-r-k5">
+    <g>
+      <path fill="#6B3122" d="M24 13h6v1h-6zM24 18h6v1h-6z"/>
+      <path fill="#F3AC90" d="M24 14h6v1h-6z"/>
+      <path fill="#DE886D" d="M24 15h6v2h-6z"/>
+      <path fill="#B8644B" d="M24 17h6v1h-6z"/>
     </g>
     </g>
     <g class="ey-look">
