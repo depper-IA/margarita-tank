@@ -739,3 +739,50 @@ def test_start_refreshes_the_mod_when_enabled(prefs_path, monkeypatch):
 
     assert _mod_installed()
     assert hooks.is_mod_enabled()
+
+
+def test_refresh_claude_mod_survives_an_oserror_from_the_settings_write(prefs_path, monkeypatch, caplog):
+    """enable_mod() rewrites settings.json; a read-only file or a full disk
+    raises OSError, which used to escape refresh_claude_mod() into start()."""
+    prefs_path.write_text(json.dumps({"claude_mod_enabled": True}))
+    controller, view = make_controller(prefs_path)
+
+    def boom(_settings):
+        raise PermissionError("settings.json is read-only")
+
+    monkeypatch.setattr(hooks, "_write_settings_atomic", boom)
+
+    with caplog.at_level("ERROR"):
+        controller.refresh_claude_mod()  # must not raise
+
+    assert controller.claude_mod_enabled is True  # the user's choice is not undone
+    assert load_preferences(prefs_path)["claude_mod_enabled"] is True
+    assert view.alerts == []
+    assert any(
+        r.levelname == "ERROR" and "mod" in r.getMessage().lower() and r.exc_info
+        for r in caplog.records
+    )
+
+
+def test_start_still_starts_the_daemon_when_refreshing_the_mod_raises(prefs_path, monkeypatch):
+    import clawd_tank_menubar.controller as controller_mod
+
+    ran = []
+
+    class QuietDaemon:
+        def __init__(self, **kwargs):
+            pass
+
+        async def run(self):
+            ran.append(True)
+
+    monkeypatch.setattr(controller_mod, "ClawdDaemon", QuietDaemon)
+    monkeypatch.setattr(hooks, "install_mod", lambda: (_ for _ in ()).throw(OSError("disk full")))
+    prefs_path.write_text(json.dumps(
+        {"ble_enabled": False, "sim_enabled": False, "claude_mod_enabled": True}))
+    controller, _view = make_controller(prefs_path)
+
+    controller.start()
+    controller._daemon_thread.join(timeout=2)
+
+    assert ran == [True]
