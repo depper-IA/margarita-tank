@@ -480,10 +480,17 @@ class ClawdTankController(DaemonObserver):
     def refresh_claude_mod(self) -> None:
         """On app start, bring an enabled mod up to date with the bundled one
         (same idea as the hooks auto-update). Silent: a failure only reaches the
-        log, and never undoes the user's choice."""
+        log, and never undoes the user's choice or keeps the app from starting.
+        install_mod() reports a file it cannot parse by returning False, but a
+        settings file that cannot be written (read-only, disk full) raises."""
         if not self._claude_mod_enabled:
             return
-        if not hooks.install_mod():
+        try:
+            refreshed = hooks.install_mod()
+        except OSError:
+            logger.exception("Could not refresh the Claude Code mod")
+            return
+        if not refreshed:
             logger.warning("Could not refresh the Claude Code mod; see earlier log lines")
 
     def toggle_login(self) -> None:

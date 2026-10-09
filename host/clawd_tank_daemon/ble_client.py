@@ -20,6 +20,19 @@ SCAN_INTERVAL_SECS = 5
 # only; bleak's WinRT scanner stop() then awaits the Stopped event with no
 # timeout and can hang forever, freezing the reconnect loop.
 SCAN_HARD_TIMEOUT_SECS = SCAN_INTERVAL_SECS + 5
+# A scan that raises instead of timing out is retried after a growing delay
+# (base * 2**n, capped). On macOS the first CBCentralManager of a process waits
+# for the TCC privacy check, which takes 2-4 s at app start; bleak 0.22.3's
+# CentralManagerDelegate.init blocks the event loop for 1 s and then raises
+# BleakError("Bluetooth device is turned off"). The next attempt succeeds, so
+# the first retry comes quickly, but a Bluetooth radio that really is off must
+# not cost one blocked second every few seconds forever.
+SCAN_ERROR_RETRY_BASE_SECS = 1.0
+SCAN_ERROR_RETRY_MAX_SECS = 10.0
+# Consecutive identical scan outcomes (errors, "not found") are logged at the
+# first occurrence and then once per this many, so a stuck loop is visible in
+# the log without a line per attempt.
+SCAN_LOG_EVERY_N = 6
 # Hard bound on a single connect attempt. bleak's WinRT connect() waits for
 # the GATT session to become active outside its own 10s timeout, so an
 # attempt can likewise hang forever.
@@ -83,6 +96,8 @@ class ClawdBleClient:
         self._loop = asyncio.get_running_loop()
         if self._client is not None:
             await self.disconnect()
+        scan_errors = 0  # consecutive scans that raised
+        misses = 0  # consecutive scans that finished without finding the board
         while True:
             logger.info("Scanning for %s device...", DEVICE_NAME)
             try:
@@ -98,9 +113,40 @@ class ClawdBleClient:
             except asyncio.TimeoutError:
                 logger.warning("BLE scan timed out, retrying...")
                 continue
-            if device is None:
-                logger.debug("%s not found, retrying...", DEVICE_NAME)
+            except Exception as e:
+                # Anything else the scanner raises (bleak's "Bluetooth device
+                # is turned off" / "not authorized" while CoreBluetooth is
+                # still starting up) must not end this loop: it would end the
+                # sender task above it, and nothing would reconnect again.
+                scan_errors += 1
+                delay = min(
+                    SCAN_ERROR_RETRY_MAX_SECS,
+                    SCAN_ERROR_RETRY_BASE_SECS * 2 ** min(scan_errors - 1, 10),
+                )
+                level = (
+                    logging.WARNING
+                    if scan_errors == 1 or scan_errors % SCAN_LOG_EVERY_N == 0
+                    else logging.DEBUG
+                )
+                logger.log(
+                    level,
+                    "BLE scan failed (%d in a row): %s; retrying in %gs",
+                    scan_errors, e or repr(e), delay,
+                )
+                await asyncio.sleep(delay)
                 continue
+            scan_errors = 0
+            if device is None:
+                misses += 1
+                if misses % SCAN_LOG_EVERY_N == 0:
+                    logger.info(
+                        "%s not found after %d scans in a row; still looking",
+                        DEVICE_NAME, misses,
+                    )
+                else:
+                    logger.debug("%s not found, retrying...", DEVICE_NAME)
+                continue
+            misses = 0
 
             logger.info("Found %s: %s (%s)", DEVICE_NAME, device.name, device.address)
             try:

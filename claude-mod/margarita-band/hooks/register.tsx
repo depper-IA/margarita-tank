@@ -88,7 +88,9 @@ const worstUsage = (u: Usage): number => Math.max(u.session ?? 0, u.weekly ?? 0)
 // Same cache the Margarita Tank daemon reads (written by its statusLine bridge).
 async function refreshUsage($: EngineInterface): Promise<void> {
   try {
-    const home = await $.env.get('HOME')
+    // HOME on macOS and Linux; Windows usually has only USERPROFILE. The names are literals:
+    // `claude plugin validate` reads them off the source.
+    const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE'))
     if (!home) return
     const raw = await $.fs.read(`${home}/.clawd-tank/statusline-cache.json`)
     const limits = JSON.parse(String(raw)).rate_limits ?? {}
