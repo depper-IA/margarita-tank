@@ -173,11 +173,16 @@ jobs:
       - name: Check the build
         working-directory: host/dist/MargaritaTank
         run: |
-          for f in MargaritaTank.exe margarita-notify.exe clawd-tank-sim.exe MargaritaTank.ico; do
+          for f in MargaritaTank.exe margarita-notify.exe margarita-statusline.exe clawd-tank-sim.exe MargaritaTank.ico; do
             test -f "$f" || { echo "ERROR: missing $f"; exit 1; }
           done
           # The hook handler must run standalone and exit 0 on an ignored event.
           echo '{"hook_event_name":"Ignored"}' | ./margarita-notify.exe
+          # The statusLine bridge must run standalone, exit 0 and print nothing
+          # when no original statusLine was saved.
+          out=$(echo '{"rate_limits":{}}' | CLAWD_TANK_DIR="$RUNNER_TEMP/clawd" ./margarita-statusline.exe)
+          test -z "$out" || { echo "ERROR: unexpected statusline output: $out"; exit 1; }
+          test -f "$RUNNER_TEMP/clawd/statusline-cache.json" || { echo "ERROR: bridge wrote no cache"; exit 1; }
 
       - name: Derive installer version
         env:

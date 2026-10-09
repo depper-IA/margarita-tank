@@ -183,3 +183,12 @@ def test_unparseable_settings_leave_state_untouched(settings_path, state_path):
     assert hooks.install_hooks() is False
     assert settings_path.read_text() == "{nope"
     assert not state_path.exists()
+
+
+def test_windows_spec_and_release_check_ship_the_statusline_exe():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    spec = (root / "host" / "windows" / "margarita_tank.spec").read_text(encoding="utf-8")
+    release = (root / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert f'STATUSLINE_NAME = "{hooks.STATUSLINE_EXE_NAME[:-4]}"' in spec
+    assert hooks.STATUSLINE_EXE_NAME in release

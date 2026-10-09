@@ -6,7 +6,7 @@
 #   cd host
 #   .venv/Scripts/pyinstaller.exe windows/margarita_tank.spec --noconfirm
 #
-# Produces a onedir build in dist/MargaritaTank/ holding two executables that
+# Produces a onedir build in dist/MargaritaTank/ holding three executables that
 # share one set of runtime files:
 #
 #   MargaritaTank.exe     the tray app (windowed, no console)
@@ -15,6 +15,9 @@
 #                         Code hands it). hooks.py points HOOK_COMMAND at it
 #                         when running frozen: sys.executable is the tray app
 #                         there, not a Python interpreter.
+#   margarita-statusline.exe  the statusLine bridge (console subsystem, same
+#                         reasoning): caches rate_limits for the usage bar and
+#                         chains the user's original statusLine command.
 #
 # Onedir, not onefile: the simulator binary and icons sit as plain files next
 # to the exe, matching how sim_process.py's _find_binary() looks next to
@@ -31,6 +34,7 @@ REPO_ROOT = os.path.abspath(os.path.join(HOST_DIR, ".."))
 
 APP_NAME = "MargaritaTank"
 NOTIFY_NAME = "margarita-notify"  # must match hooks.NOTIFY_EXE_NAME
+STATUSLINE_NAME = "margarita-statusline"  # must match hooks.STATUSLINE_EXE_NAME
 
 # The static simulator (CI and distribution builds) wins over a dev build.
 SIM_EXE = next(
@@ -54,7 +58,9 @@ Image.open(os.path.join(REPO_ROOT, "assets", "AppIcon.iconset", "icon_256x256.pn
 # POSIX and in a source checkout (hooks.NOTIFY_SCRIPT), so both paths behave
 # the same and there is a single copy of the hook logic to maintain.
 sys.path.insert(0, HOST_DIR)
-from clawd_tank_menubar.hooks import NOTIFY_EXE_NAME, NOTIFY_SCRIPT  # noqa: E402
+from clawd_tank_menubar.hooks import (  # noqa: E402
+    NOTIFY_EXE_NAME, NOTIFY_SCRIPT, STATUSLINE_BRIDGE_SCRIPT, STATUSLINE_EXE_NAME,
+)
 from clawd_tank_menubar.version import _version_from_git  # noqa: E402
 
 # Bake the version like setup.py does for the .app: a packaged build has no git
@@ -69,6 +75,11 @@ assert NOTIFY_EXE_NAME == NOTIFY_NAME + ".exe", NOTIFY_EXE_NAME
 NOTIFY_ENTRY = os.path.join(workpath, "margarita_notify.py")
 with open(NOTIFY_ENTRY, "w", encoding="utf-8") as f:
     f.write(NOTIFY_SCRIPT)
+
+assert STATUSLINE_EXE_NAME == STATUSLINE_NAME + ".exe", STATUSLINE_EXE_NAME
+STATUSLINE_ENTRY = os.path.join(workpath, "margarita_statusline.py")
+with open(STATUSLINE_ENTRY, "w", encoding="utf-8") as f:
+    f.write(STATUSLINE_BRIDGE_SCRIPT)
 
 block_cipher = None
 
@@ -109,8 +120,22 @@ notify = Analysis(
     noarchive=False,
 )
 
+statusline = Analysis(
+    [STATUSLINE_ENTRY],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=["tkinter", "PIL", "bleak", "pystray", "clawd_tank_daemon", "clawd_tank_menubar"],
+    noarchive=False,
+)
+
 tray_pyz = PYZ(tray.pure, tray.zipped_data, cipher=block_cipher)
 notify_pyz = PYZ(notify.pure, notify.zipped_data, cipher=block_cipher)
+statusline_pyz = PYZ(statusline.pure, statusline.zipped_data, cipher=block_cipher)
 
 # PyInstaller 6.x's default onedir layout nests every bundled file (including
 # clawd-tank-sim.exe) under _internal/, one level below the exe.
@@ -149,6 +174,23 @@ notify_exe = EXE(
     contents_directory=".",
 )
 
+statusline_exe = EXE(
+    statusline_pyz,
+    statusline.scripts,
+    [],
+    exclude_binaries=True,
+    name=STATUSLINE_NAME,
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    # Console subsystem: statusLine commands run with piped stdio and the JSON
+    # payload on stdin; their stdout is the rendered status line.
+    console=True,
+    icon=ICON_PATH,
+    contents_directory=".",
+)
+
 coll = COLLECT(
     tray_exe,
     tray.binaries,
@@ -158,6 +200,10 @@ coll = COLLECT(
     notify.binaries,
     notify.zipfiles,
     notify.datas,
+    statusline_exe,
+    statusline.binaries,
+    statusline.zipfiles,
+    statusline.datas,
     strip=False,
     upx=False,
     name=APP_NAME,
