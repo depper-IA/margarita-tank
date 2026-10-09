@@ -60,9 +60,12 @@ class ClawdBleClient:
 
             logger.info("Found %s: %s (%s)", DEVICE_NAME, device.name, device.address)
             try:
+                # Windows caches the GATT table per MAC; a firmware update that
+                # changes it leaves stale handles ("Characteristic not found").
                 client = BleakClient(
                     device,
                     disconnected_callback=self._on_disconnect,
+                    winrt={"use_cached_services": False},
                 )
                 await client.connect()
                 self._client = client

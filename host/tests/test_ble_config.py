@@ -276,3 +276,24 @@ async def test_disconnect_notified_resets_on_new_connection():
 
     await client._handle_disconnect()
     assert calls == [True, True]
+
+
+@pytest.mark.asyncio
+async def test_connect_bypasses_windows_gatt_cache():
+    """Windows caches the GATT table per MAC; after a firmware update that
+    changes the table, the stale cache hides characteristics. Services must
+    always be read from the device."""
+    device = MagicMock(name="device", address="58:8C:81:54:73:46")
+    bleak_client = MagicMock()
+    bleak_client.connect = AsyncMock()
+    bleak_client.mtu_size = 256
+    with patch(
+        "clawd_tank_daemon.ble_client.BleakScanner.find_device_by_name",
+        AsyncMock(return_value=device),
+    ), patch(
+        "clawd_tank_daemon.ble_client.BleakClient", return_value=bleak_client
+    ) as client_cls:
+        await ClawdBleClient().connect()
+
+    _, kwargs = client_cls.call_args
+    assert kwargs["winrt"] == {"use_cached_services": False}
