@@ -30,12 +30,31 @@ TRANSPARENT_KEY = asb.TRANSPARENT_KEY
 # (182x137 @ 3 B/px). No ported v2 frame may exceed it.
 HEAP_CEILING_BYTES = 73 * 1024
 
-# Ported prefixes, seeded with ONLY the WAKE pilot (PR1). PR2 extends this list.
-PORTED_PREFIXES = ["wake"]
+# All 15 ported prefixes: WAKE pilot (PR1) + the 14 ported in PR2.
+PORTED_PREFIXES = [
+    "wake",
+    "idle", "alert", "happy", "sleeping", "thinking", "typing", "building",
+    "confused", "dizzy", "sweeping", "debugger", "conducting", "low_battery",
+    "hat_mishap",
+]
 
 # fps per ported prefix -> expected frame_ms == round(1000/fps).
 PORTED_FPS = {
     "wake": 8,
+    "idle": 6,
+    "alert": 10,
+    "happy": 10,
+    "sleeping": 6,
+    "thinking": 8,
+    "typing": 8,
+    "building": 8,
+    "confused": 8,
+    "dizzy": 8,
+    "sweeping": 8,
+    "debugger": 8,
+    "conducting": 8,
+    "low_battery": 6,
+    "hat_mishap": 6,
 }
 
 # The 7 anims with NO v2 counterpart. These headers must stay byte-identical to
