@@ -13,7 +13,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-from clawd_tank_daemon.protocol import ASK_USER_QUESTION_TOOL
+from clawd_tank_daemon.protocol import ASK_USER_QUESTION_TOOL, DISPLAY_NAME
 
 logger = logging.getLogger("clawd-tank.hooks")
 
@@ -35,7 +35,7 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
     it to the daemon: a Unix socket on POSIX, an authenticated loopback TCP
     connection on Windows. No external dependencies.
     """
-    # NOTIFY_SCRIPT_VERSION: 2026-10-06-windows-pid
+    # NOTIFY_SCRIPT_VERSION: 2026-10-08-display-name
 
     import json
     import os
@@ -44,6 +44,9 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
     import subprocess
     import sys
     from pathlib import Path
+
+    # Fixed name on every notification card (protocol.DISPLAY_NAME).
+    DISPLAY_NAME = __DISPLAY_NAME__
 
     # POSIX: the Unix socket itself. Windows: the file the daemon publishes its
     # loopback port and shared secret in.
@@ -215,18 +218,18 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
                 "event": "add",
                 "hook": "Stop",
                 "session_id": session_id,
-                "project": project or "unknown",
-                "message": "Waiting for input",
+                "project": DISPLAY_NAME,
+                "message": "Esperando tu respuesta",
                 "pid": pid,
             }
 
         if event_name == "StopFailure":
-            message = hook.get("error", "") or hook.get("stop_reason", "") or "API error"
+            message = hook.get("error", "") or hook.get("stop_reason", "") or "Error de API"
             return {
                 "event": "add",
                 "hook": "StopFailure",
                 "session_id": session_id,
-                "project": project or "unknown",
+                "project": DISPLAY_NAME,
                 "message": message,
                 "pid": pid,
             }
@@ -238,8 +241,8 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
                 "event": "add",
                 "hook": "Notification",
                 "session_id": session_id,
-                "project": project or "unknown",
-                "message": hook.get("message", "Waiting for input"),
+                "project": DISPLAY_NAME,
+                "message": hook.get("message", "Esperando tu respuesta"),
                 "pid": pid,
             }
 
@@ -312,7 +315,7 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
 
     if __name__ == "__main__":
         main()
-''')
+''').replace("__DISPLAY_NAME__", repr(DISPLAY_NAME))
 
 # File name of the console-subsystem notify exe that the Windows PyInstaller
 # build ships next to the tray exe (see host/windows/margarita_tank.spec).
