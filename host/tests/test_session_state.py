@@ -132,14 +132,16 @@ async def test_stop_add_sets_idle():
     assert d._session_states["s1"]["state"] == "idle"
 
 @pytest.mark.asyncio
-async def test_notification_add_sets_confused():
+async def test_idle_prompt_notification_keeps_session_idle():
+    """Claude Code's idle_prompt ("waiting for your input") is not confusion:
+    the session just waits for the user, so it stays idle."""
     d = make_daemon()
     d._session_states["s1"] = {"state": "idle", "last_event": time.time()}
     await d._handle_message({
         "event": "add", "hook": "Notification", "session_id": "s1",
         "project": "proj", "message": "Waiting",
     })
-    assert d._session_states["s1"]["state"] == "confused"
+    assert d._session_states["s1"]["state"] == "idle"
 
 @pytest.mark.asyncio
 async def test_session_end_removes_session():
@@ -1188,7 +1190,7 @@ async def test_non_web_tool_failure_stays_confused():
 
 
 @pytest.mark.asyncio
-async def test_idle_prompt_after_web_tool_shows_confused_not_hat_mishap():
+async def test_idle_prompt_after_web_tool_shows_idle_not_hat_mishap():
     """An idle_prompt Notification is not a web failure, even if the last tool was web."""
     d = make_daemon()
     await d._handle_message({"event": "tool_use", "session_id": "s1", "tool_name": "WebFetch"})
@@ -1198,7 +1200,7 @@ async def test_idle_prompt_after_web_tool_shows_confused_not_hat_mishap():
     await d._handle_message({
         "event": "add", "hook": "Notification", "session_id": "s1", "project": "p", "message": "x",
     })
-    assert d._compute_display_state()["anims"] == ["confused"]
+    assert d._compute_display_state()["anims"] == ["idle"]
 
 
 # --- Low usage headroom → low_battery instead of idle ---
@@ -1813,15 +1815,22 @@ async def test_stop_with_running_subagents_returns_to_conducting():
 
 
 @pytest.mark.asyncio
-async def test_other_cards_still_shown():
-    """Permission-free attention signals keep their card: API errors and the
-    idle_prompt notification."""
+async def test_only_api_errors_show_a_card():
+    """API errors keep their card; Claude Code's idle_prompt notification, like
+    the end of a turn, shows no card."""
     d, _ = _v3_daemon()
+    for q in d._transport_queues.values():
+        while not q.empty():
+            q.get_nowait()
     await d._handle_message({"event": "add", "hook": "StopFailure", "session_id": "aaa",
                              "project": "p", "message": "Error de API"})
     await d._handle_message({"event": "add", "hook": "Notification", "session_id": "bbb",
-                             "project": "p", "message": "Esperando tu respuesta"})
-    assert {"aaa", "bbb"} <= set(d._active_notifications)
+                             "project": "p", "message": "Claude is waiting for your input"})
+    assert "aaa" in d._active_notifications
+    assert "bbb" not in d._active_notifications
+    for q in d._transport_queues.values():
+        queued = [q.get_nowait() for _ in range(q.qsize())]
+        assert [m["session_id"] for m in queued if m.get("event") == "add"] == ["aaa"]
 
 
 # --- PID liveness polling cadence ---

@@ -295,10 +295,13 @@ class ClawdDaemon:
         logger.info("Socket msg: event=%s hook=%s session=%s%s%s",
                      event, hook, session_id[:12], session_project, extra)
 
-        # End of turn (Stop) is shown by the crab (a happy oneshot), not by a
-        # notification card: cards are for things the user must act on.
+        # End of turn (Stop) is shown by the crab (a happy oneshot), and Claude
+        # Code's idle_prompt ("waiting for your input") just leaves it idle.
+        # Neither gets a notification card: cards are for things the user must
+        # act on, such as API errors.
         end_of_turn = event == "add" and hook == "Stop"
-        if event == "add" and not end_of_turn:
+        no_card = end_of_turn or (event == "add" and hook == "Notification")
+        if event == "add" and not no_card:
             self._active_notifications[session_id] = msg
         elif event == "dismiss":
             self._active_notifications.pop(session_id, None)
@@ -372,7 +375,7 @@ class ClawdDaemon:
         if (event == "subagent_stop" and changed) or end_of_turn:
             celebrated = await self._send_session_oneshot(session_id, "happy")
 
-        if not end_of_turn:
+        if not no_card:
             for q in self._transport_queues.values():
                 await q.put(msg)
 
@@ -548,9 +551,10 @@ class ClawdDaemon:
             if hook == "Stop":
                 self._session_states[session_id]["state"] = "idle"
             elif hook == "Notification":
-                self._session_states[session_id]["state"] = "confused"
-                # idle_prompt is not a tool failure: drop the last tool so a
-                # stale web tool doesn't turn it into "hat_mishap".
+                # idle_prompt: the session is just waiting for the user, so it
+                # is idle, not confused. Drop the last tool so a stale web tool
+                # can't turn a later state into "hat_mishap".
+                self._session_states[session_id]["state"] = "idle"
                 self._session_states[session_id]["tool_name"] = ""
             elif hook == "StopFailure":
                 self._session_states[session_id]["state"] = "error"

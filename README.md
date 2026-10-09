@@ -61,7 +61,7 @@ Un Clawd por sesión, cada uno con su animación, y el consumo de tokens siempre
 <td width="50%" valign="top">
 <img src="assets/readme/preview-notificacion.png" alt="Tarjeta de notificación en español junto a Clawd"><br>
 <b>Notificaciones</b><br>
-Cuando algo necesita tu atención (un error de la API o una sesión inactiva), aparece una tarjeta y el LED RGB parpadea.<br>
+Cuando la API de Claude falla, aparece una tarjeta y el LED RGB parpadea. Que Claude termine su turno o te esté esperando lo muestra Clawd, sin tarjetas.<br>
 <code>hasta 8 tarjetas · rotación automática</code>
 </td>
 </tr>
