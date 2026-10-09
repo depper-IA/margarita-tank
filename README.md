@@ -241,7 +241,7 @@ La app también conecta la barra de uso de tokens a través del `statusLine` de 
 
 ### Panel de Margarita dentro de Claude Code (opcional)
 
-Margarita también puede vivir **dentro de Claude Code**: un panel lateral con el cangrejo animado y las barras de uso de 5 h y semanal, que sigue lo que hace tu sesión (pensando, escribiendo, esperando tu respuesta…). Es un mod de Claude Code (`claude-mod/margarita-band/`) y viene **desactivado**.
+Margarita también puede vivir **dentro de Claude Code**: un panel lateral con el cangrejo animado (el uso de 5 h y semanal solo aparece como aviso de batería baja al llegar al 90 %), que sigue lo que hace tu sesión (pensando, escribiendo, esperando tu respuesta…). Es un mod de Claude Code (`claude-mod/margarita-band/`) y viene **desactivado**.
 
 - **Activarlo o desactivarlo**: menú de la app → **Claude Code Mod (panel)**, junto a *Install Claude Code Hooks* (macOS y Windows). La marca indica que está activo.
 - **Qué hace**: al activarlo copia el mod a `~/.clawd-tank/claude-mod/margarita-band/` y agrega esa carpeta a `env.CLAUDE_CODE_PLUGIN_DIRS` en `~/.claude/settings.json`; Claude Code carga cada carpeta de esa lista igual que `--plugin-dir` (varias carpetas se separan con `:` en macOS y `;` en Windows). Tus otras carpetas y el resto de tu configuración quedan intactos. Al desactivarlo se quita solo la carpeta de Margarita. Si `settings.json` no es un JSON válido, la app no lo toca y te avisa. Al desinstalar la app también se quita. Con el mod activo, la app actualiza los archivos copiados en cada arranque.
