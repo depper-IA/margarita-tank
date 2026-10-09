@@ -92,9 +92,10 @@ Proposed behaviour:
   (`downgrade_display_state`, `MIN_PROTOCOL_FOR_...`).
 - [ ] Flash the board and check it on hardware (the simulator compiles the same sources, so
   it can be checked there first).
-- [ ] Claude Code mod (`margarita-band`, lives outside this repo in `~/.claude/dev-mods/`):
-  mirror the same state — happy for ~4 s after the turn, then a looping waiting pose with
-  the text `esperando tu respuesta` until the next prompt.
+- [x] Claude Code mod (`margarita-band`, `claude-mod/margarita-band/`) already mirrors it:
+  `happy` for 8 ticks (~3.6 s) after the turn, then a looping `waiting_reply` pose with the
+  text `esperando tu respuesta` until the next prompt (`hooks/select.ts`, covered by
+  `hooks/select.test.ts`).
 
 ## Windows Claude PID resolution — Complete
 
