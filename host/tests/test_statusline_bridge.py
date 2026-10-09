@@ -399,41 +399,55 @@ def bridge_module():
     return namespace
 
 
-def _invocation(module, platform, *, env=None, existing=(), git=None, command="orig --x"):
-    """(chain_invocation result, names looked up on PATH)."""
-    looked_up = []
+def _invocation(module, platform, *, env=None, existing=(), path=None, cwd="C:\\work\\repo",
+                command="orig --x"):
+    """chain_invocation result. `path` is the PATH value; `existing` the files that exist."""
+    environ = dict(env or {})
+    if path is not None:
+        environ["PATH"] = path
+    return module["chain_invocation"](
+        command, platform, environ, lambda p: p in existing, cwd)
 
-    def which(name):
-        looked_up.append(name)
-        return git if name == "git" else WSL_LAUNCHER  # a bash on PATH would be WSL's
 
-    result = module["chain_invocation"](
-        command, platform, env or {}, which, lambda path: path in existing)
-    return result, looked_up
+GIT_PATH = "C:\\Program Files\\Git\\cmd"
 
 
 @pytest.mark.parametrize("platform", ["darwin", "linux"])
 def test_posix_keeps_chaining_through_the_default_shell(bridge_module, platform):
-    result, looked_up = _invocation(
+    result = _invocation(
         bridge_module, platform, env={"CLAUDE_CODE_GIT_BASH_PATH": GIT_BASH},
-        existing={GIT_BASH}, git=GIT_CMD_EXE)
+        existing={GIT_BASH, GIT_CMD_EXE}, path=GIT_PATH)
     assert result == ("orig --x", True)
-    assert looked_up == []
 
 
 def test_windows_uses_the_git_bash_claude_code_was_told_to_use(bridge_module):
     custom = "D:\\tools\\git\\bin\\bash.exe"
-    result, _ = _invocation(
+    result = _invocation(
         bridge_module, "win32", env={"CLAUDE_CODE_GIT_BASH_PATH": custom},
-        existing={custom, GIT_BASH}, git=GIT_CMD_EXE)
+        existing={custom, GIT_BASH, GIT_CMD_EXE}, path=GIT_PATH)
     assert result == ([custom, "-c", "orig --x"], False)
 
 
 def test_windows_ignores_a_configured_bash_that_is_not_there(bridge_module):
-    result, _ = _invocation(
+    result = _invocation(
         bridge_module, "win32", env={"CLAUDE_CODE_GIT_BASH_PATH": "D:\\gone\\bash.exe"},
-        existing={GIT_BASH}, git=GIT_CMD_EXE)
+        existing={GIT_BASH, GIT_CMD_EXE}, path=GIT_PATH)
     assert result == ([GIT_BASH, "-c", "orig --x"], False)
+
+
+@pytest.mark.parametrize("configured", [
+    "bash.exe",                       # relative: resolved against the project cwd
+    "bin\\bash.exe",
+    ".\\bash.exe",
+    "C:bash.exe",                     # drive-relative
+    "C:\\Windows\\System32\\cmd.exe",   # absolute and present, but not bash.exe
+    "C:\\Program Files\\Git\\bin",      # not a bash.exe
+])
+def test_windows_requires_the_configured_bash_to_be_an_absolute_bash_exe(bridge_module, configured):
+    result = _invocation(
+        bridge_module, "win32", env={"CLAUDE_CODE_GIT_BASH_PATH": configured},
+        existing={configured, "C:\\work\\repo\\bash.exe"})
+    assert result == ("orig --x", True)
 
 
 @pytest.mark.parametrize("git, bash", [
@@ -445,18 +459,54 @@ def test_windows_ignores_a_configured_bash_that_is_not_there(bridge_module):
     ("D:\\PortableGit\\bin\\git.exe", "D:\\PortableGit\\bin\\bash.exe"),
 ])
 def test_windows_finds_the_bash_that_ships_next_to_git(bridge_module, git, bash):
-    result, _ = _invocation(bridge_module, "win32", existing={bash}, git=git)
+    result = _invocation(
+        bridge_module, "win32", existing={git, bash}, path="C:\\Windows;" + ntpath_dirname(git))
     assert result == ([bash, "-c", "orig --x"], False)
+
+
+def ntpath_dirname(p):
+    import ntpath
+    return ntpath.dirname(p)
 
 
 def test_windows_never_takes_a_bash_off_the_path(bridge_module):
     # System32\bash.exe is the WSL launcher: it would run the command in Linux.
-    result, looked_up = _invocation(
-        bridge_module, "win32", existing={WSL_LAUNCHER}, git=GIT_CMD_EXE)
+    result = _invocation(
+        bridge_module, "win32", existing={WSL_LAUNCHER, GIT_CMD_EXE},
+        path="C:\\Windows\\System32;" + GIT_PATH)
     assert result == ("orig --x", True)
-    assert looked_up == ["git"]
 
 
 def test_windows_without_git_or_bash_falls_back_to_the_default_shell(bridge_module):
-    assert _invocation(bridge_module, "win32")[0] == ("orig --x", True)
-    assert _invocation(bridge_module, "win32", git=GIT_CMD_EXE)[0] == ("orig --x", True)
+    assert _invocation(bridge_module, "win32") == ("orig --x", True)
+    assert _invocation(bridge_module, "win32", existing={GIT_CMD_EXE}, path="C:\\bin") == ("orig --x", True)
+    # git found but no bash.exe in a Git for Windows layout
+    assert _invocation(bridge_module, "win32", existing={GIT_CMD_EXE}, path=GIT_PATH) == ("orig --x", True)
+
+
+def test_windows_ignores_a_git_planted_in_the_current_directory(bridge_module):
+    cwd = "C:\\work\\repo"
+    planted = {cwd + "\\git.exe", cwd + "\\bash.exe", cwd + "\\bin\\bash.exe"}
+    # PATH has the cwd explicitly, in a different case and with a trailing slash
+    result = _invocation(bridge_module, "win32", existing=planted, cwd=cwd,
+                         path="c:\\WORK\\repo\\;")
+    assert result == ("orig --x", True)
+    # an empty PATH entry means "current directory" to some Windows lookups
+    assert _invocation(bridge_module, "win32", existing=planted, cwd=cwd, path=";") == ("orig --x", True)
+
+
+def test_windows_ignores_a_planted_git_but_still_finds_the_real_one(bridge_module):
+    cwd = "C:\\work\\repo"
+    existing = {cwd + "\\git.exe", cwd + "\\bin\\bash.exe", GIT_CMD_EXE, GIT_BASH}
+    result = _invocation(bridge_module, "win32", existing=existing, cwd=cwd,
+                         path=cwd + ";" + GIT_PATH)
+    assert result == ([GIT_BASH, "-c", "orig --x"], False)
+
+
+@pytest.mark.parametrize("entry", ["Git\\cmd", ".\\Git\\cmd", "..\\Git\\cmd", "C:Git\\cmd", "."])
+def test_windows_ignores_relative_path_entries(bridge_module, entry):
+    cwd = "C:\\work\\repo"
+    existing = {cwd + "\\Git\\cmd\\git.exe", cwd + "\\Git\\bin\\bash.exe",
+                "Git\\cmd\\git.exe", "Git\\bin\\bash.exe"}
+    result = _invocation(bridge_module, "win32", existing=existing, cwd=cwd, path=entry)
+    assert result == ("orig --x", True)

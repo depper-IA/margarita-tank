@@ -351,7 +351,6 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
     import json
     import ntpath
     import os
-    import shutil
     import subprocess
     import sys
     import tempfile
@@ -394,29 +393,68 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
             return None
 
 
-    def find_git_bash(environ, which, isfile):
+    def _is_absolute(path):
+        # A drive (or UNC share) AND a root: "C:foo" and "\\\\foo" resolve against
+        # the current directory or drive, which is where a project can plant files.
+        drive, rest = ntpath.splitdrive(path)
+        return bool(drive) and rest[:1] in ("\\\\", "/")
+
+    def _same_path(a, b):
+        return ntpath.normcase(ntpath.normpath(a)) == ntpath.normcase(ntpath.normpath(b))
+
+    def _trusted_path_dirs(environ, cwd):
+        """Absolute PATH entries that are not the current directory, in order.
+        The bridge runs in the user's project: shutil.which on Windows also looks
+        in the cwd (and an empty or relative entry means the cwd), so a repository
+        could plant its own git.exe there and have it executed."""
+        raw = next((v for k, v in environ.items() if k.upper() == "PATH"), "") or ""
+        for entry in raw.split(";"):
+            entry = entry.strip().strip('"')
+            if entry and _is_absolute(entry) and not _same_path(entry, cwd):
+                yield entry
+
+    # Where bash.exe sits relative to the folder holding git.exe, by that folder's
+    # name: Git for Windows has git.exe in cmd, mingw64/bin or bin (bash.exe is
+    # in the install's bin folder, or next to git.exe when that is bin itself).
+    def _bash_folder(git_dir):
+        name = ntpath.basename(git_dir).lower()
+        if name == "cmd":
+            return ntpath.join(git_dir, "..", "bin")
+        if name == "bin":
+            parent = ntpath.basename(ntpath.dirname(git_dir)).lower()
+            if parent in ("mingw64", "mingw32", "clangarm64"):
+                return ntpath.join(git_dir, "..", "..", "bin")
+            return git_dir
+        return None
+
+    def _is_bash_exe(path, isfile):
+        return (isinstance(path, str) and _is_absolute(path)
+                and ntpath.basename(path).lower() == "bash.exe" and isfile(path))
+
+    def find_git_bash(environ, isfile, cwd):
         """The Git Bash that Claude Code runs statusLine commands through on Windows:
-        the one named by CLAUDE_CODE_GIT_BASH_PATH, else the bash.exe that ships
-        with the git on PATH (git.exe sits in the cmd, mingw64/bin or bin folder of
-        the Git for Windows install, whose bash.exe is in its bin folder). Never a
-        bash found on PATH itself: System32/bash.exe is the WSL launcher and would
-        run the command in Linux. None when there is no Git Bash."""
+        the one named by CLAUDE_CODE_GIT_BASH_PATH (an absolute path to an existing
+        bash.exe), else the bash.exe of the Git for Windows install whose git.exe is
+        on PATH. git is looked up only in absolute PATH entries other than `cwd`,
+        never through shutil.which (it searches the cwd). Never a bash found on PATH
+        itself: System32/bash.exe is the WSL launcher and would run the command in
+        Linux. None when there is no Git Bash."""
         configured = environ.get(GIT_BASH_ENV)
-        if configured and isfile(configured):
+        if configured and _is_bash_exe(configured, isfile):
             return configured
-        git = which("git")
-        if not git:
-            return None
-        git_dir = ntpath.dirname(git)
-        for up in ((), ("..",), ("..", "..")):
-            parts = up + ("bin",) if up else ()
-            candidate = ntpath.normpath(ntpath.join(git_dir, *parts, "bash.exe"))
-            if isfile(candidate):
+        for directory in _trusted_path_dirs(environ, cwd):
+            if not isfile(ntpath.join(directory, "git.exe")):
+                continue
+            folder = _bash_folder(directory)
+            if folder is None:
+                continue
+            candidate = ntpath.normpath(ntpath.join(folder, "bash.exe"))
+            if _is_bash_exe(candidate, isfile):
                 return candidate
         return None
 
 
-    def chain_invocation(command, platform=None, environ=None, which=None, isfile=None):
+    def chain_invocation(command, platform=None, environ=None, isfile=None, cwd=None):
         """(args, shell) for subprocess.run to chain `command` through.
 
         The user's original was written for the shell Claude Code runs it with. On
@@ -426,8 +464,8 @@ STATUSLINE_BRIDGE_SCRIPT = textwrap.dedent('''\
         if (sys.platform if platform is None else platform) == "win32":
             bash = find_git_bash(
                 os.environ if environ is None else environ,
-                shutil.which if which is None else which,
                 os.path.isfile if isfile is None else isfile,
+                os.getcwd() if cwd is None else cwd,
             )
             if bash:
                 return [bash, "-c", command], False
