@@ -24,6 +24,15 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 
 ---
 
+## Claude Code mod (side panel) — Implemented (Windows and a real Claude session untested)
+
+- [x] `claude-mod/margarita-band/` added to the repo and bundled (py2app `DATA_FILES`, PyInstaller `datas`; the release workflow checks both).
+- [x] `hooks.install_mod()` / `enable_mod()` / `disable_mod()` copy the mod to `~/.clawd-tank/claude-mod/margarita-band/` and add/remove only our folder in `settings.json` `env.CLAUDE_CODE_PLUGIN_DIRS`; `uninstall_hooks()` removes it too.
+- [x] `claude_mod_enabled` preference (default off), `controller.toggle_claude_mod()`, refresh on app start, and the "Claude Code Mod (panel)" item in the macOS menu and Windows tray.
+- [ ] Click the menu item in the real macOS app and start a new Claude Code session to see the panel load from `CLAUDE_CODE_PLUGIN_DIRS` (docks right from ~110 columns in fullscreen).
+- [ ] Same check on Windows (frozen build: the mod is read from next to `MargaritaTank.exe`; separator `;`).
+- [ ] Decide whether the mod should also show the daemon's real per-session state (today it derives it from Claude Code's own events).
+
 ## statusLine bridge — Implemented (Windows paths untested on real Windows)
 
 - [x] Bridge script (`hooks.STATUSLINE_BRIDGE_SCRIPT`) caches `rate_limits` atomically and chains the user's original statusLine.

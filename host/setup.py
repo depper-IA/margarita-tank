@@ -47,7 +47,10 @@ def _bake_version():
 _bake_version()
 
 APP = ["launcher.py"]
-DATA_FILES = []
+# The Claude Code panel mod ships as plain files under Resources/claude-mod/;
+# the app copies it to ~/.clawd-tank/claude-mod/ when its menu toggle is on
+# (hooks.resolve_mod_source() reads it back through RESOURCEPATH).
+DATA_FILES = [("claude-mod", ["../claude-mod/margarita-band"])]
 OPTIONS = {
     "argv_emulation": False,
     "iconfile": "AppIcon.icns",

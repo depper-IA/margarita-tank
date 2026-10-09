@@ -60,6 +60,7 @@ class TrayState:
     session_timeout_seconds: int
     hooks_installed: bool
     login_enabled: bool
+    claude_mod_enabled: bool
 
 
 class TrayView(Protocol):
@@ -117,6 +118,7 @@ class ClawdTankController(DaemonObserver):
         self._session_timeout_seconds = DEFAULT_SESSION_TIMEOUT_SECONDS
 
         self._hooks_installed = hooks.are_hooks_installed()
+        self._claude_mod_enabled = bool(prefs.get("claude_mod_enabled", False))
 
         if autostart.is_enabled() and autostart.is_stale():
             logger.info("Autostart entry is stale, updating to current executable")
@@ -168,6 +170,10 @@ class ClawdTankController(DaemonObserver):
         return self._login_enabled
 
     @property
+    def claude_mod_enabled(self) -> bool:
+        return self._claude_mod_enabled
+
+    @property
     def session_timeout_seconds(self) -> int:
         return self._session_timeout_seconds
 
@@ -209,6 +215,7 @@ class ClawdTankController(DaemonObserver):
             session_timeout_seconds=self._session_timeout_seconds,
             hooks_installed=self._hooks_installed,
             login_enabled=self._login_enabled,
+            claude_mod_enabled=self._claude_mod_enabled,
         )
         self._view.render(state)
 
@@ -218,6 +225,8 @@ class ClawdTankController(DaemonObserver):
         """Start the daemon's asyncio event loop in a background thread and
         wire up transports according to preferences. Moved verbatim from
         app.py's _start_daemon_thread()."""
+        self.refresh_claude_mod()
+
         self._daemon = ClawdDaemon(observer=self, headless=False)
 
         def run_loop():
@@ -417,6 +426,65 @@ class ClawdTankController(DaemonObserver):
                 ),
             )
         self._render()
+
+    def toggle_claude_mod(self) -> None:
+        """Turn the Margarita side panel in Claude Code on or off. The choice is
+        saved only once settings.json really changed, so the menu check never
+        claims a state that did not happen."""
+        if self._claude_mod_enabled:
+            if not hooks.disable_mod():
+                self._view.alert(
+                    title="Claude Code Mod Not Disabled",
+                    message=(
+                        "~/.claude/settings.json could not be parsed, so it was left "
+                        "untouched. Fix the file and try again."
+                    ),
+                )
+                self._render()
+                return
+            self._claude_mod_enabled = False
+            save_preferences(self._prefs_path, updates={"claude_mod_enabled": False})
+            # The alert is modal: render first so the check is already right.
+            self._render()
+            self._view.alert(
+                title="Claude Code Mod Disabled",
+                message=(
+                    "The Margarita panel was removed from ~/.claude/settings.json. "
+                    "Restart your Claude Code sessions for the change to take effect."
+                ),
+            )
+        else:
+            if not hooks.install_mod():
+                self._view.alert(
+                    title="Claude Code Mod Not Enabled",
+                    message=(
+                        "The Margarita panel could not be installed: its files could not "
+                        "be copied, or ~/.claude/settings.json could not be parsed and "
+                        "was left untouched. See the log for details."
+                    ),
+                )
+                self._render()
+                return
+            self._claude_mod_enabled = True
+            save_preferences(self._prefs_path, updates={"claude_mod_enabled": True})
+            self._render()
+            self._view.alert(
+                title="Claude Code Mod Enabled",
+                message=(
+                    "The Margarita panel was added to Claude Code. Restart your Claude "
+                    "Code sessions for it to appear; type /margarita to open it."
+                ),
+            )
+        self._render()
+
+    def refresh_claude_mod(self) -> None:
+        """On app start, bring an enabled mod up to date with the bundled one
+        (same idea as the hooks auto-update). Silent: a failure only reaches the
+        log, and never undoes the user's choice."""
+        if not self._claude_mod_enabled:
+            return
+        if not hooks.install_mod():
+            logger.warning("Could not refresh the Claude Code mod; see earlier log lines")
 
     def toggle_login(self) -> None:
         if autostart.is_enabled():

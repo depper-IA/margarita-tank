@@ -12,6 +12,17 @@ def test_load_returns_defaults_when_missing(prefs_file):
     result = load_preferences(prefs_file)
     assert result == DEFAULTS
 
+def test_claude_mod_is_opt_in(prefs_file):
+    assert DEFAULTS["claude_mod_enabled"] is False
+    assert load_preferences(prefs_file)["claude_mod_enabled"] is False
+
+
+def test_claude_mod_choice_survives_other_preference_writes(prefs_file):
+    save_preferences(path=prefs_file, updates={"claude_mod_enabled": True})
+    save_preferences(path=prefs_file, updates={"sim_enabled": False})
+    assert load_preferences(prefs_file)["claude_mod_enabled"] is True
+
+
 def test_load_merges_missing_keys_with_defaults(prefs_file):
     prefs_file.write_text(json.dumps({"sim_enabled": False}))
     result = load_preferences(prefs_file)

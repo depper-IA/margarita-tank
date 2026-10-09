@@ -16,6 +16,18 @@ from .slider import create_slider_menu_item
 
 logger = logging.getLogger("clawd-tank.menubar")
 
+def _bring_to_front() -> None:
+    """Activate the app so its next modal alert shows above other windows.
+
+    A menu-bar-only app (LSUIElement) is never the active app, so without this
+    rumps.alert opens behind whatever window has focus."""
+    try:
+        from AppKit import NSApplication
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+    except Exception:
+        logger.debug("Could not activate the app before an alert", exc_info=True)
+
+
 _ICON_FILES = {
     "disconnected": "crab-disconnected",
     "connected": "crab-connected",
@@ -106,6 +118,13 @@ class RumpsTrayView:
         )
         self._hooks_item.state = controller.hooks_installed
 
+        # Claude Code mod: the Margarita side panel inside Claude Code
+        self._claude_mod_item = rumps.MenuItem(
+            "Claude Code Mod (panel)",
+            callback=lambda _sender: controller.toggle_claude_mod(),
+        )
+        self._claude_mod_item.state = controller.claude_mod_enabled
+
         # Launch at login
         self._login_item = rumps.MenuItem(
             "Launch at Login",
@@ -132,6 +151,7 @@ class RumpsTrayView:
             self._session_timeout_menu,
             None,
             self._hooks_item,
+            self._claude_mod_item,
             self._login_item,
             None,
             self._version_item,
@@ -208,8 +228,9 @@ class RumpsTrayView:
         for seconds, item in self._session_timeout_items.items():
             item.state = (seconds == state.session_timeout_seconds)
 
-        # --- Hooks / login ---
+        # --- Hooks / Claude Code mod / login ---
         self._hooks_item.state = state.hooks_installed
+        self._claude_mod_item.state = state.claude_mod_enabled
         self._login_item.state = state.login_enabled
 
         # --- Icon and global state ---
@@ -217,6 +238,7 @@ class RumpsTrayView:
         self._app.title = ""
 
     def alert(self, title: str, message: str) -> None:
+        _bring_to_front()
         rumps.alert(title=title, message=message)
 
     def quit(self) -> None:

@@ -73,6 +73,21 @@ def test_uninstall_flag_removes_installed_hooks(monkeypatch, no_tray):
     assert json.loads(hooks.CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8")) == {"model": "opus"}
 
 
+def test_uninstall_flag_also_removes_the_claude_code_mod(monkeypatch, no_tray):
+    """The uninstaller deletes the app, so Claude Code must stop loading the mod
+    folder the app installed (and only that folder)."""
+    hooks.CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    hooks.CLAUDE_SETTINGS_PATH.write_text(
+        json.dumps({"env": {hooks.PLUGIN_DIRS_ENV: "/my/mods/a"}}), encoding="utf-8")
+    assert hooks.install_mod()
+    assert hooks.is_mod_enabled()
+
+    assert _run_main(monkeypatch, "--uninstall-hooks") == 0
+
+    settings = json.loads(hooks.CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
+    assert settings == {"env": {hooks.PLUGIN_DIRS_ENV: "/my/mods/a"}}
+
+
 def test_without_flag_starts_the_platform_tray(monkeypatch, no_tray):
     monkeypatch.setattr(sys, "argv", ["MargaritaTank.exe"])
     entry.main()
