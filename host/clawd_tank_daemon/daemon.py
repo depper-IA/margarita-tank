@@ -351,12 +351,12 @@ class ClawdDaemon:
                 continue
             session_subagents = state.get("subagents", set())
 
+            # The crab shows what the session itself is doing; its subagents are
+            # reported by the HUD counter. 'conducting' is only for a session
+            # that is idle while its subagents work, so the crab doesn't freeze
+            # on it while the main session keeps thinking and running tools.
             if state["state"] == "waiting":
-                # "needs you" is the most actionable signal — outrank the subagent
-                # 'conducting' indicator so a blocked session is never masked.
                 anims.append("alert")
-            elif session_subagents:
-                anims.append("conducting")
             elif state["state"] == "working":
                 anims.append(_tool_to_anim(state.get("tool_name", "")))
             elif state["state"] == "thinking":
@@ -365,6 +365,8 @@ class ClawdDaemon:
                 anims.append("confused")
             elif state["state"] == "error":
                 anims.append("dizzy")
+            elif session_subagents:
+                anims.append("conducting")
             else:
                 anims.append("idle")
             ids.append(display_id)

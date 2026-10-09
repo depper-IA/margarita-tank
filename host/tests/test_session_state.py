@@ -6,7 +6,7 @@ import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from clawd_tank_daemon.daemon import ClawdDaemon
+from clawd_tank_daemon.daemon import ClawdDaemon, _tool_to_anim
 
 
 def make_daemon():
@@ -395,13 +395,14 @@ async def test_duplicate_subagent_start_is_idempotent():
     assert d._session_states["s1"]["subagents"] == {"a1"}
 
 def test_working_session_with_subagents_counts_once():
-    """A session that is both state=working AND has subagents shows conducting."""
+    """A working session with subagents shows its own work; the subagent is
+    reported once through the HUD counter."""
     d = make_daemon()
     _add_session(d, "s1", {
         "state": "working", "last_event": time.time(), "subagents": {"a1"},
     })
     state = d._compute_display_state()
-    assert state["anims"] == ["conducting"]
+    assert state["anims"] == ["typing"]
     assert state["subagents"] == 1
 
 @pytest.mark.asyncio
@@ -418,10 +419,10 @@ async def test_subagent_lifecycle():
     await d._handle_message({"event": "tool_use", "session_id": "s1"})
     assert d._compute_display_state() == {"anims": ["typing"], "ids": [1], "subagents": 0}
 
-    # Subagent spawned — session becomes conducting
+    # Subagent spawned — the session keeps showing its own work
     await d._handle_message({"event": "subagent_start", "session_id": "s1", "agent_id": "a1"})
     state = d._compute_display_state()
-    assert state["anims"] == ["conducting"]
+    assert state["anims"] == ["typing"]
     assert state["subagents"] == 1
     assert "a1" in d._session_states["s1"]["subagents"]
 
@@ -649,13 +650,13 @@ async def test_display_state_single_session_typing():
 
 
 @pytest.mark.asyncio
-async def test_display_state_working_with_subagents_becomes_conducting():
+async def test_display_state_working_with_subagents_keeps_own_anim():
     d = make_daemon()
     await d._handle_message({"event": "session_start", "session_id": "aaa"})
     await d._handle_message({"event": "tool_use", "session_id": "aaa"})
     await d._handle_message({"event": "subagent_start", "session_id": "aaa", "agent_id": "sub1"})
     state = d._compute_display_state()
-    assert state["anims"] == ["conducting"]
+    assert state["anims"] == ["typing"]
     assert state["subagents"] == 1
 
 
@@ -970,7 +971,7 @@ def test_working_no_tool_name_returns_typing():
     assert state["anims"] == ["typing"]
 
 
-def test_subagent_override_trumps_tool_name():
+def test_tool_name_wins_over_subagents():
     d = make_daemon()
     _add_session(d, "s1", {
         "state": "working",
@@ -979,7 +980,7 @@ def test_subagent_override_trumps_tool_name():
         "subagents": {"agent-1"},
     })
     state = d._compute_display_state()
-    assert state["anims"] == ["conducting"]
+    assert state["anims"] == [_tool_to_anim("Read")]
 
 
 # --- AskUserQuestion → "waiting" state + alert animation ---
@@ -1064,13 +1065,17 @@ def test_waiting_outranks_subagents():
     assert state["anims"] == ["alert"]
 
 
-def test_working_with_subagents_still_conducting():
-    """Regression: a non-waiting working session with subagents still shows conducting."""
+def test_thinking_with_subagents_shows_thinking():
+    """While background subagents run, the main session's own activity is shown
+    (the HUD counter reports the subagents); conducting is only for an idle
+    session that is waiting on its subagents."""
     d = make_daemon()
     _add_session(d, "s1", {
-        "state": "working", "last_event": time.time(), "tool_name": "Read", "subagents": {"a1"},
+        "state": "thinking", "last_event": time.time(), "subagents": {"a1"},
     })
-    assert d._compute_display_state()["anims"] == ["conducting"]
+    state = d._compute_display_state()
+    assert state["anims"] == ["thinking"]
+    assert state["subagents"] == 1
 
 
 @pytest.mark.asyncio
