@@ -82,6 +82,13 @@ jobs:
         run: |
           cp simulator/build-static/clawd-tank-sim "host/dist/Margarita Tank.app/Contents/Resources/clawd-tank-sim"
 
+      - name: Ad-hoc sign app bundle
+        # Copying the simulator in breaks the seal py2app signed; a downloaded
+        # app with a broken signature is reported as "damaged" by Gatekeeper.
+        run: |
+          codesign --force --deep --sign - "host/dist/Margarita Tank.app"
+          codesign --verify --deep --strict --verbose=2 "host/dist/Margarita Tank.app"
+
       - name: Create DMG
         working-directory: host
         run: |
