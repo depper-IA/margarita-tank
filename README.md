@@ -42,7 +42,7 @@ Ambos instaladores incluyen la app de la barra de menú / bandeja con el simulad
 <br>
 
 - **macOS**: abre el DMG y arrastra **Margarita Tank** a Aplicaciones. La app está firmada ad-hoc pero no notarizada por Apple, así que la primera vez hay que hacer clic derecho → **Abrir** (o *Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente*). Si macOS dice que la app "está dañada", ejecuta `xattr -dr com.apple.quarantine "/Applications/Margarita Tank.app"`.
-- **Windows**: instalación por usuario, sin permisos de administrador. El instalador no está firmado, así que SmartScreen puede mostrar un aviso: haz clic en **Más información** → **Ejecutar de todas formas**. Al desinstalar se quitan de `~/.claude/settings.json` solo los hooks de Margarita Tank; tus propios hooks quedan intactos.
+- **Windows**: instalación por usuario, sin permisos de administrador. El instalador no está firmado, así que SmartScreen puede mostrar un aviso: haz clic en **Más información** → **Ejecutar de todas formas**. Al desinstalar se quitan de `~/.claude/settings.json` solo los hooks de Margarita Tank y, si lo activaste, la carpeta del panel de Claude Code; tus propios hooks quedan intactos.
 - **Hardware**: el firmware del ESP32 no va en los instaladores; se flashea aparte (ver [Firmware](#firmware-esp-idf-53x)). Flashéalo de nuevo para ver las animaciones nuevas; con un firmware anterior la app sigue funcionando con las que ese firmware conoce. Sin hardware, usa el simulador incluido desde el menú de la app.
 - **Bluetooth en PC de escritorio**: si la conexión se corta o falla con `Unreachable`, revisa que la placa tenga puestas las antenas Wi-Fi/Bluetooth. Sin ellas la señal llega muy débil (cerca de -95 dBm) aunque el ESP32 esté al lado.
 
@@ -238,6 +238,16 @@ python -m venv .venv
 El daemon instala un hook handler en `~/.clawd-tank/clawd-tank-notify` (`clawd-tank-notify.py` en Windows). Para conectarlo a Claude Code, agrega los hooks a `~/.claude/settings.json` (o usa el instalador de la app). Reinicia las sesiones de Claude Code para que los cambios surtan efecto.
 
 La app también conecta la barra de uso de tokens a través del `statusLine` de Claude Code: instala `~/.clawd-tank/statusline_bridge.py` (`margarita-statusline.exe` en el instalador de Windows) y lo registra como `statusLine` en `~/.claude/settings.json`. El puente guarda los límites de uso en `~/.clawd-tank/statusline-cache.json` y encadena tu `statusLine` anterior (guardado en `~/.clawd-tank/statusline-original.json`), así que tu línea de estado sigue funcionando igual. Al desinstalar los hooks se restaura tu `statusLine` original.
+
+### Panel de Margarita dentro de Claude Code (opcional)
+
+Margarita también puede vivir **dentro de Claude Code**: un panel lateral con el cangrejo animado y las barras de uso de 5 h y semanal, que sigue lo que hace tu sesión (pensando, escribiendo, esperando tu respuesta…). Es un mod de Claude Code (`claude-mod/margarita-band/`) y viene **desactivado**.
+
+- **Activarlo o desactivarlo**: menú de la app → **Claude Code Mod (panel)**, junto a *Install Claude Code Hooks* (macOS y Windows). La marca indica que está activo.
+- **Qué hace**: al activarlo copia el mod a `~/.clawd-tank/claude-mod/margarita-band/` y agrega esa carpeta a `env.CLAUDE_CODE_PLUGIN_DIRS` en `~/.claude/settings.json`; Claude Code carga cada carpeta de esa lista igual que `--plugin-dir` (varias carpetas se separan con `:` en macOS y `;` en Windows). Tus otras carpetas y el resto de tu configuración quedan intactos. Al desactivarlo se quita solo la carpeta de Margarita. Si `settings.json` no es un JSON válido, la app no lo toca y te avisa. Al desinstalar la app también se quita. Con el mod activo, la app actualiza los archivos copiados en cada arranque.
+- **Reinicia tus sesiones de Claude Code** después de activarlo o desactivarlo: las sesiones abiertas no vuelven a leer esa lista.
+- **Dónde aparece**: en pantalla completa el panel se acopla a la **derecha** desde unas **110 columnas** de ancho; en una terminal más angosta se muestra encima del prompt. `/margarita` lo abre de nuevo; `/margarita <animación>` previsualiza una animación y `/margarita auto` vuelve al modo automático.
+- **Barras de uso**: las lee de `~/.clawd-tank/statusline-cache.json`, el mismo archivo que escribe el puente de `statusLine` de arriba.
 
 Para renombrar el dispositivo, cambia el nombre en un solo lugar por capa:
 
