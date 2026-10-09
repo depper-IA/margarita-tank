@@ -23,3 +23,10 @@ def test_py2app_bundles_the_mod_under_resources_claude_mod():
 def test_pyinstaller_bundles_the_mod_next_to_the_exe():
     spec = (ROOT / "host" / "windows" / "margarita_tank.spec").read_text(encoding="utf-8")
     assert f'"claude-mod", "{hooks.MOD_NAME}"), "claude-mod/{hooks.MOD_NAME}"' in spec
+
+
+def test_release_workflow_checks_the_mod_is_in_both_builds():
+    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    plugin = f"claude-mod/{hooks.MOD_NAME}/.claude-plugin/plugin.json"
+    assert f"Contents/Resources/{plugin}" in release  # macOS .app
+    assert f"test -f {plugin}" in release  # Windows folder

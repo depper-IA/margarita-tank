@@ -76,6 +76,12 @@ jobs:
         working-directory: host
         run: python setup.py py2app
 
+      - name: Check the bundled Claude Code mod
+        # hooks.resolve_mod_source() reads it from Contents/Resources/claude-mod.
+        run: |
+          test -f "host/dist/Margarita Tank.app/Contents/Resources/claude-mod/margarita-band/.claude-plugin/plugin.json" \
+            || { echo "ERROR: the Claude Code mod is missing from the app bundle"; exit 1; }
+
       - name: Bundle simulator into app
         # Contents/Resources/ is where sim_process.py looks first (helper
         # binaries in Contents/MacOS/ can be mistaken for the main executable).
@@ -176,6 +182,9 @@ jobs:
           for f in MargaritaTank.exe margarita-notify.exe margarita-statusline.exe clawd-tank-sim.exe MargaritaTank.ico; do
             test -f "$f" || { echo "ERROR: missing $f"; exit 1; }
           done
+          # The Claude Code mod the menu toggle installs ships next to the exe.
+          test -f claude-mod/margarita-band/.claude-plugin/plugin.json \
+            || { echo "ERROR: missing the Claude Code mod"; exit 1; }
           # The hook handler must run standalone and exit 0 on an ignored event.
           echo '{"hook_event_name":"Ignored"}' | ./margarita-notify.exe
           # The statusLine bridge must run standalone, exit 0 and print nothing
