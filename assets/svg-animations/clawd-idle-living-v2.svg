@@ -188,30 +188,30 @@
       }
       @keyframes ar-r-k1 {
         0% { opacity: 0; }
-        69.2708% { opacity: 1; }
-        70.3125% { opacity: 0; }
-      }
-      @keyframes ar-r-k2 {
-        0% { opacity: 0; }
         60.9375% { opacity: 1; }
         63.0208% { opacity: 0; }
       }
-      @keyframes ar-r-k3 {
-        0% { opacity: 0; }
-        68.2292% { opacity: 1; }
-        69.2708% { opacity: 0; }
-      }
-      @keyframes ar-r-k4 {
+      @keyframes ar-r-k2 {
         0% { opacity: 0; }
         63.0208% { opacity: 1; }
         64.0625% { opacity: 0; }
         67.1875% { opacity: 1; }
         68.2292% { opacity: 0; }
       }
-      @keyframes ar-r-k5 {
+      @keyframes ar-r-k3 {
         0% { opacity: 0; }
         64.0625% { opacity: 1; }
         67.1875% { opacity: 0; }
+      }
+      @keyframes ar-r-k4 {
+        0% { opacity: 0; }
+        68.2292% { opacity: 1; }
+        69.2708% { opacity: 0; }
+      }
+      @keyframes ar-r-k5 {
+        0% { opacity: 0; }
+        69.2708% { opacity: 1; }
+        70.3125% { opacity: 0; }
       }
       @keyframes ey-open {
         0% { opacity: 1; }
@@ -469,29 +469,13 @@
     </g>
     <g class="ar-r-k1">
     <g>
-      <path fill="#6B3122" d="M24 16h3v1h-3zM24 21h3v1h-3z"/>
-      <path fill="#F3AC90" d="M24 17h3v1h-3z"/>
-      <path fill="#DE886D" d="M24 18h3v2h-3z"/>
-      <path fill="#B8644B" d="M24 20h3v1h-3z"/>
-    </g>
-    </g>
-    <g class="ar-r-k2">
-    <g>
       <path fill="#6B3122" d="M24 13h4v1h-4zM24 18h4v1h-4z"/>
       <path fill="#F3AC90" d="M24 14h4v1h-4z"/>
       <path fill="#DE886D" d="M24 15h4v2h-4z"/>
       <path fill="#B8644B" d="M24 17h4v1h-4z"/>
     </g>
     </g>
-    <g class="ar-r-k3">
-    <g>
-      <path fill="#6B3122" d="M24 14h4v1h-4zM24 19h4v1h-4z"/>
-      <path fill="#F3AC90" d="M24 15h4v1h-4z"/>
-      <path fill="#DE886D" d="M24 16h4v2h-4z"/>
-      <path fill="#B8644B" d="M24 18h4v1h-4z"/>
-    </g>
-    </g>
-    <g class="ar-r-k4">
+    <g class="ar-r-k2">
     <g>
       <path fill="#6B3122" d="M24 13h5v1h-5zM24 18h5v1h-5z"/>
       <path fill="#F3AC90" d="M24 14h5v1h-5z"/>
@@ -499,12 +483,28 @@
       <path fill="#B8644B" d="M24 17h5v1h-5z"/>
     </g>
     </g>
-    <g class="ar-r-k5">
+    <g class="ar-r-k3">
     <g>
       <path fill="#6B3122" d="M24 13h6v1h-6zM24 18h6v1h-6z"/>
       <path fill="#F3AC90" d="M24 14h6v1h-6z"/>
       <path fill="#DE886D" d="M24 15h6v2h-6z"/>
       <path fill="#B8644B" d="M24 17h6v1h-6z"/>
+    </g>
+    </g>
+    <g class="ar-r-k4">
+    <g>
+      <path fill="#6B3122" d="M24 14h4v1h-4zM24 19h4v1h-4z"/>
+      <path fill="#F3AC90" d="M24 15h4v1h-4z"/>
+      <path fill="#DE886D" d="M24 16h4v2h-4z"/>
+      <path fill="#B8644B" d="M24 18h4v1h-4z"/>
+    </g>
+    </g>
+    <g class="ar-r-k5">
+    <g>
+      <path fill="#6B3122" d="M24 16h3v1h-3zM24 21h3v1h-3z"/>
+      <path fill="#F3AC90" d="M24 17h3v1h-3z"/>
+      <path fill="#DE886D" d="M24 18h3v2h-3z"/>
+      <path fill="#B8644B" d="M24 20h3v1h-3z"/>
     </g>
     </g>
     <g class="ey-look">
