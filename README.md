@@ -237,7 +237,7 @@ python -m venv .venv
 
 El daemon instala un hook handler en `~/.clawd-tank/clawd-tank-notify` (`clawd-tank-notify.py` en Windows). Para conectarlo a Claude Code, agrega los hooks a `~/.claude/settings.json` (o usa el instalador de la app). Reinicia las sesiones de Claude Code para que los cambios surtan efecto.
 
-La app también conecta la barra de uso de tokens a través del `statusLine` de Claude Code: instala `~/.clawd-tank/statusline_bridge.py` (`margarita-statusline.exe` en el instalador de Windows) y lo registra como `statusLine` en `~/.claude/settings.json`. El puente guarda los límites de uso en `~/.clawd-tank/statusline-cache.json` y encadena tu `statusLine` anterior (guardado en `~/.clawd-tank/statusline-original.json`), así que tu línea de estado sigue funcionando igual. Al desinstalar los hooks se restaura tu `statusLine` original.
+La app también conecta la barra de uso de tokens a través del `statusLine` de Claude Code: instala `~/.clawd-tank/statusline_bridge.sh` (un script `sh` que no necesita Python; `margarita-statusline.exe` en el instalador de Windows) y lo registra como `statusLine` en `~/.claude/settings.json`. El puente guarda los límites de uso en `~/.clawd-tank/statusline-cache.json` y encadena tu `statusLine` anterior (guardado en `~/.clawd-tank/statusline-original.json`, con el comando también en texto plano en `~/.clawd-tank/statusline-original.txt` para el script `sh`), así que tu línea de estado sigue funcionando igual. Una instalación anterior que apuntaba a `statusline_bridge.py` se migra sola al arrancar la app. Al desinstalar los hooks se restaura tu `statusLine` original.
 
 ### Panel de Margarita dentro de Claude Code (opcional)
 

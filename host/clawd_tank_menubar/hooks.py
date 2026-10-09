@@ -27,9 +27,12 @@ NOTIFY_SCRIPT_PATH = CLAWD_DIR / (
 )
 CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
 
-# The statusLine bridge keeps the same file name on every platform: it is always
-# run through an explicit interpreter on Windows and via its shebang on POSIX.
-STATUSLINE_SCRIPT_PATH = CLAWD_DIR / "statusline_bridge.py"
+# Windows runs the Python bridge through an explicit interpreter, so it needs the
+# .py suffix; macOS and Linux run a plain sh script and need no Python at all.
+LEGACY_STATUSLINE_SCRIPT_NAME = "statusline_bridge.py"  # what POSIX ran before the sh bridge
+STATUSLINE_SCRIPT_PATH = CLAWD_DIR / (
+    LEGACY_STATUSLINE_SCRIPT_NAME if sys.platform == "win32" else "statusline_bridge.sh"
+)
 # The user's pre-existing statusLine, saved so the bridge can chain it and
 # uninstall can restore it exactly.
 STATUSLINE_STATE_NAME = "statusline-original.json"
@@ -538,20 +541,27 @@ HOOK_COMMAND = build_hook_command(
 )
 
 
+def build_statusline_script(platform: str) -> str:
+    """The bridge script to install on `platform`: Windows keeps the Python one
+    (also frozen into margarita-statusline.exe), everywhere else it is plain sh,
+    so the user's statusLine never depends on a working python3."""
+    return STATUSLINE_BRIDGE_SCRIPT if platform == "win32" else STATUSLINE_BRIDGE_SH
+
+
 def build_statusline_command(platform: str, frozen: bool, executable: str, script_path) -> str:
     """The statusLine command that runs the bridge on `platform`.
 
-    Same rules as build_hook_command(): POSIX runs the executable script through
-    its shebang (shell-quoted, since this one is a shell command line that may
-    sit under a home directory with spaces); Windows names the interpreter, or
-    runs the bundled console exe when frozen.
+    POSIX runs the sh script through /bin/sh, so it works even if the file lost
+    its execute bit (the path is shell-quoted: this is a shell command line that
+    may sit under a home directory with spaces). Windows names the interpreter,
+    like build_hook_command(), or runs the bundled console exe when frozen.
     """
     if platform == "win32":
         if frozen:
             exe = ntpath.join(ntpath.dirname(executable), STATUSLINE_EXE_NAME)
             return f'"{exe}"'
         return f'"{executable}" "{script_path}"'
-    return shlex.quote(str(script_path))
+    return "/bin/sh " + shlex.quote(str(script_path))
 
 
 STATUSLINE_COMMAND = build_statusline_command(
@@ -632,7 +642,7 @@ def install_notify_script() -> None:
 def install_statusline_bridge_script() -> None:
     """Write the standalone statusLine bridge to STATUSLINE_SCRIPT_PATH."""
     CLAWD_DIR.mkdir(parents=True, exist_ok=True)
-    STATUSLINE_SCRIPT_PATH.write_text(STATUSLINE_BRIDGE_SCRIPT, encoding="utf-8")
+    STATUSLINE_SCRIPT_PATH.write_text(build_statusline_script(sys.platform), encoding="utf-8")
     if sys.platform != "win32":
         STATUSLINE_SCRIPT_PATH.chmod(0o755)
     logger.info("Installed statusLine bridge: %s", STATUSLINE_SCRIPT_PATH)
@@ -642,17 +652,34 @@ def _statusline_state_path() -> Path:
     return CLAWD_DIR / STATUSLINE_STATE_NAME
 
 
+def _statusline_command_path() -> Path:
+    return CLAWD_DIR / STATUSLINE_COMMAND_NAME
+
+
+def _legacy_posix_statusline_command() -> str | None:
+    """The statusLine command POSIX installs wrote before the sh bridge: the
+    Python script run through its shebang. None on Windows, where that script is
+    still the current one."""
+    if sys.platform == "win32":
+        return None
+    return shlex.quote(str(STATUSLINE_SCRIPT_PATH.with_name(LEGACY_STATUSLINE_SCRIPT_NAME)))
+
+
 def _statusline_is_ours(value) -> bool:
     """True if a settings.statusLine value runs our bridge: the current command,
     or one left by another interpreter / install folder (same script, or the
-    bundled exe), so a reinstall replaces it instead of treating it as the
-    user's own. A wrapper that merely mentions the script is not ours."""
+    bundled exe) or by the python3 bridge POSIX ran before the sh one, so a
+    reinstall replaces it instead of treating it as the user's own. A wrapper
+    that merely mentions the script is not ours."""
     if not isinstance(value, dict):
         return False
     command = value.get("command")
     if not isinstance(command, str):
         return False
     if command == STATUSLINE_COMMAND or command.startswith(STATUSLINE_COMMAND + " "):
+        return True
+    legacy = _legacy_posix_statusline_command()
+    if legacy and (command == legacy or command.startswith(legacy + " ")):
         return True
     script = re.escape(str(STATUSLINE_SCRIPT_PATH))
     pattern = (
@@ -676,6 +703,39 @@ def _write_json_atomic(path: Path, data) -> None:
         raise
 
 
+def _saved_original_command() -> str | None:
+    """The command of the saved original statusLine; None when there is none (or
+    it has no command, like a static text line, so there is nothing to chain)."""
+    try:
+        state = json.loads(_statusline_state_path().read_text(encoding="utf-8-sig"))
+        command = state["statusLine"]["command"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return command if isinstance(command, str) and command.strip() else None
+
+
+def _sync_statusline_command_file() -> None:
+    """Keep the plain-text copy of the saved command in step with the JSON state:
+    the sh bridge runs exactly that text. Removed when there is no command."""
+    path = _statusline_command_path()
+    command = _saved_original_command()
+    if command is None:
+        path.unlink(missing_ok=True)
+        return
+    data = command.encode("utf-8")
+    if path.is_file() and path.read_bytes() == data:
+        return
+    _write_bytes_atomic(path, data)
+
+
+def _statusline_command_file_is_current() -> bool:
+    command = _saved_original_command()
+    path = _statusline_command_path()
+    if command is None:
+        return not path.exists()
+    return path.is_file() and path.read_bytes() == command.encode("utf-8")
+
+
 def _wire_statusline(settings: dict) -> None:
     """Point settings.statusLine at the bridge, saving the user's own first.
 
@@ -689,6 +749,7 @@ def _wire_statusline(settings: dict) -> None:
             state_path.unlink(missing_ok=True)
         else:
             _write_json_atomic(state_path, {"statusLine": current})
+    _sync_statusline_command_file()
     base = current if isinstance(current, dict) else {}
     settings["statusLine"] = {**base, "type": "command", "command": STATUSLINE_COMMAND}
 
@@ -712,6 +773,15 @@ def _unwire_statusline(settings: dict) -> bool:
     else:
         settings["statusLine"] = original
     return True
+
+
+def _remove_legacy_statusline_script() -> None:
+    """Delete the python3 bridge an older POSIX install left behind. Only called
+    once settings.json points at the sh bridge: before that, the file is what a
+    still-wired statusLine runs."""
+    if sys.platform == "win32":
+        return
+    STATUSLINE_SCRIPT_PATH.with_name(LEGACY_STATUSLINE_SCRIPT_NAME).unlink(missing_ok=True)
 
 
 def _matcher_of(entry: dict):
@@ -1091,7 +1161,8 @@ def are_hooks_installed() -> bool:
                     return False
     statusline = settings.get("statusLine")
     return (isinstance(statusline, dict)
-            and statusline.get("command") == STATUSLINE_COMMAND)
+            and statusline.get("command") == STATUSLINE_COMMAND
+            and _statusline_command_file_is_current())
 
 
 def install_hooks() -> bool:
@@ -1134,6 +1205,7 @@ def install_hooks() -> bool:
     _wire_statusline(settings)
 
     _write_settings_atomic(settings)
+    _remove_legacy_statusline_script()
     logger.info("Installed hooks in %s", CLAUDE_SETTINGS_PATH)
     return True
 
@@ -1194,5 +1266,6 @@ def uninstall_hooks() -> bool:
     _write_settings_atomic(settings)
     if is_unwired:
         _statusline_state_path().unlink(missing_ok=True)
+        _statusline_command_path().unlink(missing_ok=True)
     logger.info("Uninstalled hooks from %s", CLAUDE_SETTINGS_PATH)
     return True

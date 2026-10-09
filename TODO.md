@@ -46,6 +46,7 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 - [x] Bridge script (`hooks.STATUSLINE_BRIDGE_SCRIPT`) caches `rate_limits` atomically and chains the user's original statusLine.
 - [x] `install_hooks()` / `uninstall_hooks()` wire and restore `statusLine`; `are_hooks_installed()` reports outdated until it is wired.
 - [x] `margarita-statusline.exe` added to the PyInstaller spec and the release workflow check.
+- [x] macOS/Linux run `hooks.STATUSLINE_BRIDGE_SH` (plain `sh`, no python3) instead of the Python bridge; the original command is mirrored to `statusline-original.txt`, and an install wired to `statusline_bridge.py` is migrated on start.
 - [ ] Verify the frozen Windows build end to end (statusLine run by Claude Code on Windows).
 
 ## Phase 1 new crab animations — Implemented (not yet flashed)

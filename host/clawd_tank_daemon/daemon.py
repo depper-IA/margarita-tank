@@ -94,8 +94,9 @@ LOCK_PATH = Path.home() / ".clawd-tank" / "daemon.lock"
 # process exits, so a single immediate retry fails.
 LOCK_TAKEOVER_TIMEOUT_SECS = 3.0
 LOCK_RETRY_STEP_SECS = 0.1
-# Cache written by the statusLine bridge (hooks.STATUSLINE_BRIDGE_SCRIPT, installed
-# as ~/.clawd-tank/statusline_bridge.py) holding Claude Code's rate_limits.
+# Cache written by the statusLine bridge (hooks.STATUSLINE_BRIDGE_SH on macOS/Linux,
+# hooks.STATUSLINE_BRIDGE_SCRIPT on Windows, installed as ~/.clawd-tank/
+# statusline_bridge.sh / .py) holding Claude Code's rate_limits.
 USAGE_CACHE_PATH = str(Path.home() / ".clawd-tank" / "statusline-cache.json")
 # How often to poll the usage cache and push set_usage to transports.
 USAGE_POLL_INTERVAL_SECS = 15.0
