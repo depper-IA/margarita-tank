@@ -1,0 +1,292 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-15 -25 45 45" width="500" height="500">
+  <!-- Clawd v2 low battery: 8 s loop at 6 fps (48 frames). Same beats as clawd-idle-low-battery.svg: dozing body that sinks and rises over a 4 s breath, drooping pincers, eyes slit shut with one half-open peek, red battery warning whose last bar pulses. -->
+  <defs>
+    <style>
+      .tmv { animation: tmv 8s infinite step-end; }
+      .lg1v4 { animation: lg1v4 8s infinite step-end; }
+      .lg1v5 { animation: lg1v5 8s infinite step-end; }
+      .lg2v4 { animation: lg2v4 8s infinite step-end; }
+      .lg2v5 { animation: lg2v5 8s infinite step-end; }
+      .lg3v4 { animation: lg3v4 8s infinite step-end; }
+      .lg3v5 { animation: lg3v5 8s infinite step-end; }
+      .lg4v4 { animation: lg4v4 8s infinite step-end; }
+      .lg4v5 { animation: lg4v5 8s infinite step-end; }
+      .ley-eyes-shut-hi { animation: ley-eyes-shut-hi 8s infinite step-end; }
+      .ley-eyes-squint { animation: ley-eyes-squint 8s infinite step-end; }
+      .ley-mv { animation: ley-mv 8s infinite step-end; }
+      .bar { animation: bar 8s infinite step-end; }
+      .ar-l { animation: ar-l 8s infinite step-end; }
+      .ar-r { animation: ar-r 8s infinite step-end; }
+      @keyframes tmv {
+        0% { transform: translate(0px, 3px); }
+        9.375% { transform: translate(0px, 4px); }
+        19.7917% { transform: translate(0px, 5px); }
+        30.2083% { transform: translate(0px, 4px); }
+        40.625% { transform: translate(0px, 3px); }
+        59.375% { transform: translate(0px, 4px); }
+        69.7917% { transform: translate(0px, 5px); }
+        80.2083% { transform: translate(0px, 4px); }
+        90.625% { transform: translate(0px, 3px); }
+      }
+      @keyframes lg1v4 {
+        0% { opacity: 0; }
+        9.375% { opacity: 1; }
+        19.7917% { opacity: 0; }
+        30.2083% { opacity: 1; }
+        40.625% { opacity: 0; }
+        59.375% { opacity: 1; }
+        69.7917% { opacity: 0; }
+        80.2083% { opacity: 1; }
+        90.625% { opacity: 0; }
+      }
+      @keyframes lg1v5 {
+        0% { opacity: 1; }
+        9.375% { opacity: 0; }
+        40.625% { opacity: 1; }
+        59.375% { opacity: 0; }
+        90.625% { opacity: 1; }
+      }
+      @keyframes lg2v4 {
+        0% { opacity: 0; }
+        9.375% { opacity: 1; }
+        19.7917% { opacity: 0; }
+        30.2083% { opacity: 1; }
+        40.625% { opacity: 0; }
+        59.375% { opacity: 1; }
+        69.7917% { opacity: 0; }
+        80.2083% { opacity: 1; }
+        90.625% { opacity: 0; }
+      }
+      @keyframes lg2v5 {
+        0% { opacity: 1; }
+        9.375% { opacity: 0; }
+        40.625% { opacity: 1; }
+        59.375% { opacity: 0; }
+        90.625% { opacity: 1; }
+      }
+      @keyframes lg3v4 {
+        0% { opacity: 0; }
+        9.375% { opacity: 1; }
+        19.7917% { opacity: 0; }
+        30.2083% { opacity: 1; }
+        40.625% { opacity: 0; }
+        59.375% { opacity: 1; }
+        69.7917% { opacity: 0; }
+        80.2083% { opacity: 1; }
+        90.625% { opacity: 0; }
+      }
+      @keyframes lg3v5 {
+        0% { opacity: 1; }
+        9.375% { opacity: 0; }
+        40.625% { opacity: 1; }
+        59.375% { opacity: 0; }
+        90.625% { opacity: 1; }
+      }
+      @keyframes lg4v4 {
+        0% { opacity: 0; }
+        9.375% { opacity: 1; }
+        19.7917% { opacity: 0; }
+        30.2083% { opacity: 1; }
+        40.625% { opacity: 0; }
+        59.375% { opacity: 1; }
+        69.7917% { opacity: 0; }
+        80.2083% { opacity: 1; }
+        90.625% { opacity: 0; }
+      }
+      @keyframes lg4v5 {
+        0% { opacity: 1; }
+        9.375% { opacity: 0; }
+        40.625% { opacity: 1; }
+        59.375% { opacity: 0; }
+        90.625% { opacity: 1; }
+      }
+      @keyframes ley-eyes-shut-hi {
+        0% { opacity: 1; }
+        67.7083% { opacity: 0; }
+        84.375% { opacity: 1; }
+      }
+      @keyframes ley-eyes-squint {
+        0% { opacity: 0; }
+        67.7083% { opacity: 1; }
+        84.375% { opacity: 0; }
+      }
+      @keyframes ley-mv {
+        0% { transform: translate(0px, 2px); }
+        9.375% { transform: translate(0px, 3px); }
+        19.7917% { transform: translate(0px, 4px); }
+        30.2083% { transform: translate(0px, 3px); }
+        40.625% { transform: translate(0px, 2px); }
+        59.375% { transform: translate(0px, 3px); }
+        67.7083% { transform: translate(0px, 4px); }
+        69.7917% { transform: translate(0px, 5px); }
+        80.2083% { transform: translate(0px, 4px); }
+        84.375% { transform: translate(0px, 3px); }
+        90.625% { transform: translate(0px, 2px); }
+      }
+      @keyframes bar {
+        0% { fill: #FF4444; }
+        9.375% { fill: #A93434; }
+        17.7083% { fill: #5E2A2A; }
+        38.5417% { fill: #A93434; }
+        44.7917% { fill: #FF4444; }
+        59.375% { fill: #A93434; }
+        67.7083% { fill: #5E2A2A; }
+        88.5417% { fill: #A93434; }
+        94.7917% { fill: #FF4444; }
+      }
+      @keyframes ar-l {
+        0% { transform: translate(-1px, 4px); }
+        9.375% { transform: translate(-1px, 5px); }
+        19.7917% { transform: translate(-1px, 6px); }
+        30.2083% { transform: translate(-1px, 5px); }
+        40.625% { transform: translate(-1px, 4px); }
+        59.375% { transform: translate(-1px, 5px); }
+        69.7917% { transform: translate(-1px, 6px); }
+        80.2083% { transform: translate(-1px, 5px); }
+        90.625% { transform: translate(-1px, 4px); }
+      }
+      @keyframes ar-r {
+        0% { transform: translate(1px, 4px); }
+        9.375% { transform: translate(1px, 5px); }
+        19.7917% { transform: translate(1px, 6px); }
+        30.2083% { transform: translate(1px, 5px); }
+        40.625% { transform: translate(1px, 4px); }
+        59.375% { transform: translate(1px, 5px); }
+        69.7917% { transform: translate(1px, 6px); }
+        80.2083% { transform: translate(1px, 5px); }
+        90.625% { transform: translate(1px, 4px); }
+      }
+    </style>
+    <!-- ===== rig: shared Clawd v2 parts, identical in every clawd-*-v2.svg (see clawd-static-base-v2.svg) ===== -->
+    <!-- ground shadow, two translucent rows -->
+    <g id="shadow">
+      <path fill="#000000" fill-opacity="0.3" d="M3 30h24v1h-24z"/>
+      <path fill="#000000" fill-opacity="0.15" d="M6 31h18v1h-18z"/>
+    </g>
+    <!-- left pincer fused with the body (rest spot and sliding along the body side) -->
+    <g id="arm-l">
+      <path fill="#6B3122" d="M0 15h5v1h-5zM-1 16h1v1h-1zM-1 17h2v1h-2zM1 18h1v2h-1zM-1 20h2v1h-2zM-1 21h1v1h-1zM0 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M1 16h4v1h-4zM1 20h1v1h-1z"/>
+      <path fill="#B8644B" d="M0 16h1v1h-1zM1 17h1v1h-1zM0 21h5v1h-5z"/>
+      <path fill="#DE886D" d="M2 17h3v4h-3z"/>
+    </g>
+    <!-- right pincer fused with the body (rest spot and sliding along the body side) -->
+    <g id="arm-r">
+      <path fill="#B8644B" d="M29 16h1v1h-1zM28 17h1v1h-1zM25 21h5v1h-5z"/>
+      <path fill="#6B3122" d="M25 15h5v1h-5zM30 16h1v1h-1zM29 17h2v1h-2zM28 18h1v2h-1zM29 20h2v1h-2zM30 21h1v1h-1zM25 22h5v1h-5z"/>
+      <path fill="#F3AC90" d="M25 16h4v1h-4zM28 20h1v1h-1z"/>
+      <path fill="#DE886D" d="M25 17h3v4h-3z"/>
+    </g>
+    <!-- eyes squinted, 2x2 -->
+    <g id="eyes-squint">
+      <path fill="#1B1311" d="M8 17h2v2h-2zM20 17h2v2h-2z"/>
+    </g>
+    <!-- eyes shut, line at mid height -->
+    <g id="eyes-shut-hi">
+      <path fill="#1B1311" d="M8 18h2v1h-2zM20 18h2v1h-2z"/>
+    </g>
+    <!-- leg 1, 4 px long -->
+    <g id="leg1-n4">
+      <path fill="#B8644B" d="M6 26h1v3h-1z"/>
+      <path fill="#6B3122" d="M7 26h1v3h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2, 4 px long -->
+    <g id="leg2-n4">
+      <path fill="#B8644B" d="M10 26h1v3h-1z"/>
+      <path fill="#6B3122" d="M11 26h1v3h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3, 4 px long -->
+    <g id="leg3-n4">
+      <path fill="#B8644B" d="M18 26h1v3h-1z"/>
+      <path fill="#6B3122" d="M19 26h1v3h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4, 4 px long -->
+    <g id="leg4-n4">
+      <path fill="#B8644B" d="M22 26h1v3h-1z"/>
+      <path fill="#6B3122" d="M23 26h1v3h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- body 24x13 -->
+    <g id="torso-24x13">
+      <path fill="#DE886D" d="M25 13h1v1h-1zM7 14h18v1h-18zM5 15h20v7h-20zM4 22h1v2h-1z"/>
+      <path fill="#6B3122" d="M3 12h24v1h-24zM3 13h1v11h-1zM26 13h1v11h-1zM3 24h24v1h-24z"/>
+      <path fill="#B8644B" d="M25 14h1v8h-1zM5 22h21v2h-21z"/>
+      <path fill="#F3AC90" d="M4 13h21v1h-21zM4 14h1v8h-1z"/>
+      <path fill="#FFD3C2" d="M5 14h2v1h-2z"/>
+    </g>
+    <!-- leg 1, 5 px long -->
+    <g id="leg1-n5">
+      <path fill="#B8644B" d="M6 25h1v4h-1z"/>
+      <path fill="#6B3122" d="M7 25h1v4h-1zM6 29h2v1h-2z"/>
+    </g>
+    <!-- leg 2, 5 px long -->
+    <g id="leg2-n5">
+      <path fill="#B8644B" d="M10 25h1v4h-1z"/>
+      <path fill="#6B3122" d="M11 25h1v4h-1zM10 29h2v1h-2z"/>
+    </g>
+    <!-- leg 3, 5 px long -->
+    <g id="leg3-n5">
+      <path fill="#B8644B" d="M18 25h1v4h-1z"/>
+      <path fill="#6B3122" d="M19 25h1v4h-1zM18 29h2v1h-2z"/>
+    </g>
+    <!-- leg 4, 5 px long -->
+    <g id="leg4-n5">
+      <path fill="#B8644B" d="M22 25h1v4h-1z"/>
+      <path fill="#6B3122" d="M23 25h1v4h-1zM22 29h2v1h-2z"/>
+    </g>
+    <!-- ===== props used by this animation ===== -->
+    <g id="battery">
+      <path fill="#2A1E1A" d="M8 3h16v5h-16z"/>
+      <path fill="#7A1F1F" d="M7 1h18v1h-18zM6 2h1v7h-1zM25 2h1v1h-1zM26 3h2v1h-2zM27 4h1v3h-1zM26 7h2v1h-2zM25 8h1v1h-1zM7 9h18v1h-18z"/>
+      <path fill="#FF4444" d="M7 2h18v1h-18zM7 3h1v5h-1zM24 3h2v1h-2zM24 4h3v3h-3zM24 7h2v1h-2zM7 8h18v1h-18z"/>
+    </g>
+    <g id="battery-bar">
+      <path fill="#FF4444" d="M9 4h3v3h-3z"/>
+    </g>
+  </defs>
+  <g transform="scale(.5)">
+    <use href="#shadow"/>
+    <g class="lg1v4">
+    <use href="#leg1-n4"/>
+    </g>
+    <g class="lg1v5">
+    <use href="#leg1-n5"/>
+    </g>
+    <g class="lg2v4">
+    <use href="#leg2-n4"/>
+    </g>
+    <g class="lg2v5">
+    <use href="#leg2-n5"/>
+    </g>
+    <g class="lg3v4">
+    <use href="#leg3-n4"/>
+    </g>
+    <g class="lg3v5">
+    <use href="#leg3-n5"/>
+    </g>
+    <g class="lg4v4">
+    <use href="#leg4-n4"/>
+    </g>
+    <g class="lg4v5">
+    <use href="#leg4-n5"/>
+    </g>
+    <use href="#battery"/>
+    <g class="bar"><use href="#battery-bar"/></g>
+    <g class="tmv">
+    <use href="#torso-24x13"/>
+    </g>
+    <g class="ar-l">
+    <use href="#arm-l"/>
+    </g>
+    <g class="ar-r">
+    <use href="#arm-r"/>
+    </g>
+    <g class="ley-mv">
+    <g class="ley-eyes-shut-hi">
+    <use href="#eyes-shut-hi"/>
+    </g>
+    <g class="ley-eyes-squint">
+    <use href="#eyes-squint"/>
+    </g>
+    </g>
+  </g>
+</svg>
