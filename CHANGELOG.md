@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **statusLine bridge for the usage bar** — The daemon reads token usage from `~/.clawd-tank/statusline-cache.json`, but nothing wrote it on a fresh install. The app now installs `statusline_bridge.py` (`margarita-statusline.exe` in the Windows build) and points Claude Code's `statusLine` at it. The bridge atomically caches the statusLine JSON (`rate_limits`) and chains the user's original statusLine command, which is saved to `~/.clawd-tank/statusline-original.json` and restored exactly on uninstall. Install is idempotent and runs through the existing hooks auto-update flow.
+
 ## [1.4.1] - 2026-04-16
 
 ### Fixed
