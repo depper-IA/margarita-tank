@@ -540,3 +540,182 @@ def test_daemon_thread_logs_system_exit(prefs_path, monkeypatch, caplog):
     )
     controller.check_daemon_health()
     assert view.renders[-1].icon == "disconnected"
+
+
+# --- Claude Code mod (the side panel) ------------------------------------------
+
+
+PLUGIN_DIRS = "CLAUDE_CODE_PLUGIN_DIRS"
+
+
+def _mod_installed() -> bool:
+    return (hooks.MOD_DIR / ".claude-plugin" / "plugin.json").is_file()
+
+
+def test_claude_mod_is_off_by_default_and_reaches_the_view(prefs_path):
+    controller, view = make_controller(prefs_path)
+    assert controller.claude_mod_enabled is False
+    controller.toggle_sim_window()  # any render
+    assert view.renders[-1].claude_mod_enabled is False
+
+
+def test_claude_mod_preference_is_the_initial_state(prefs_path):
+    prefs_path.write_text(json.dumps({"claude_mod_enabled": True}))
+    controller, _view = make_controller(prefs_path)
+    assert controller.claude_mod_enabled is True
+
+
+def test_toggle_claude_mod_on_installs_enables_saves_and_asks_for_a_restart(prefs_path):
+    controller, view = make_controller(prefs_path)
+
+    controller.toggle_claude_mod()
+
+    assert _mod_installed()
+    assert hooks.is_mod_enabled()
+    assert controller.claude_mod_enabled is True
+    assert load_preferences(prefs_path)["claude_mod_enabled"] is True
+    assert view.renders[-1].claude_mod_enabled is True
+    title, message = view.alerts[-1]
+    assert title == "Claude Code Mod Enabled"
+    assert "Restart your Claude Code sessions" in message
+
+
+def test_toggle_claude_mod_off_removes_only_our_folder_and_asks_for_a_restart(prefs_path):
+    hooks.CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    hooks.CLAUDE_SETTINGS_PATH.write_text(
+        json.dumps({"env": {PLUGIN_DIRS: "/my/mods/a"}}), encoding="utf-8")
+    controller, view = make_controller(prefs_path)
+    controller.toggle_claude_mod()
+    assert hooks.is_mod_enabled()
+
+    controller.toggle_claude_mod()
+
+    assert not hooks.is_mod_enabled()
+    settings = json.loads(hooks.CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
+    assert settings == {"env": {PLUGIN_DIRS: "/my/mods/a"}}
+    assert controller.claude_mod_enabled is False
+    assert load_preferences(prefs_path)["claude_mod_enabled"] is False
+    assert view.renders[-1].claude_mod_enabled is False
+    title, message = view.alerts[-1]
+    assert title == "Claude Code Mod Disabled"
+    assert "Restart your Claude Code sessions" in message
+
+
+def test_toggle_claude_mod_preserves_other_preference_keys(prefs_path):
+    prefs_path.write_text(json.dumps({"sim_enabled": False}))
+    controller, _view = make_controller(prefs_path)
+    controller.toggle_claude_mod()
+    prefs = load_preferences(prefs_path)
+    assert prefs["sim_enabled"] is False
+    assert prefs["ble_enabled"] is True
+
+
+def test_toggle_claude_mod_on_stays_off_when_settings_are_unparseable(prefs_path):
+    hooks.CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    hooks.CLAUDE_SETTINGS_PATH.write_text('{"model": "opus",}', encoding="utf-8")
+    controller, view = make_controller(prefs_path)
+
+    controller.toggle_claude_mod()
+
+    assert hooks.CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8") == '{"model": "opus",}'
+    assert controller.claude_mod_enabled is False
+    assert load_preferences(prefs_path)["claude_mod_enabled"] is False
+    assert view.renders[-1].claude_mod_enabled is False
+    assert view.alerts[-1][0] == "Claude Code Mod Not Enabled"
+
+
+def test_toggle_claude_mod_on_stays_off_when_the_build_has_no_mod(prefs_path, tmp_path, monkeypatch):
+    monkeypatch.setattr(hooks, "MOD_SOURCE_DIR", tmp_path / "missing")
+    controller, view = make_controller(prefs_path)
+
+    controller.toggle_claude_mod()
+
+    assert not hooks.CLAUDE_SETTINGS_PATH.exists()
+    assert controller.claude_mod_enabled is False
+    assert view.alerts[-1][0] == "Claude Code Mod Not Enabled"
+
+
+def test_toggle_claude_mod_off_stays_on_when_settings_are_unparseable(prefs_path):
+    controller, view = make_controller(prefs_path)
+    controller.toggle_claude_mod()
+    hooks.CLAUDE_SETTINGS_PATH.write_text("{nope", encoding="utf-8")
+
+    controller.toggle_claude_mod()
+
+    assert hooks.CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8") == "{nope"
+    assert controller.claude_mod_enabled is True
+    assert load_preferences(prefs_path)["claude_mod_enabled"] is True
+    assert view.renders[-1].claude_mod_enabled is True
+    assert view.alerts[-1][0] == "Claude Code Mod Not Disabled"
+
+
+def test_refresh_claude_mod_updates_an_enabled_mod_silently(prefs_path):
+    prefs_path.write_text(json.dumps({"claude_mod_enabled": True}))
+    controller, view = make_controller(prefs_path)
+    assert not _mod_installed()
+
+    controller.refresh_claude_mod()
+
+    assert _mod_installed()
+    assert hooks.is_mod_enabled()
+    assert view.alerts == []
+
+
+def test_refresh_claude_mod_fixes_a_stale_installed_copy(prefs_path):
+    prefs_path.write_text(json.dumps({"claude_mod_enabled": True}))
+    controller, _view = make_controller(prefs_path)
+    controller.refresh_claude_mod()
+    register = hooks.MOD_DIR / "hooks" / "register.tsx"
+    register.write_text("// outdated", encoding="utf-8")
+
+    controller.refresh_claude_mod()
+
+    assert register.read_text(encoding="utf-8") \
+        == (hooks.MOD_SOURCE_DIR / "hooks" / "register.tsx").read_text(encoding="utf-8")
+
+
+def test_refresh_claude_mod_does_nothing_while_the_mod_is_off(prefs_path):
+    controller, view = make_controller(prefs_path)
+
+    controller.refresh_claude_mod()
+
+    assert not hooks.MOD_DIR.exists()
+    assert not hooks.CLAUDE_SETTINGS_PATH.exists()
+    assert view.alerts == []
+
+
+def test_refresh_claude_mod_survives_unparseable_settings(prefs_path, caplog):
+    prefs_path.write_text(json.dumps({"claude_mod_enabled": True}))
+    hooks.CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    hooks.CLAUDE_SETTINGS_PATH.write_text("{nope", encoding="utf-8")
+    controller, view = make_controller(prefs_path)
+
+    with caplog.at_level("WARNING"):
+        controller.refresh_claude_mod()
+
+    assert hooks.CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8") == "{nope"
+    assert controller.claude_mod_enabled is True  # the user's choice is not undone
+    assert view.alerts == []
+    assert any("mod" in r.getMessage().lower() for r in caplog.records)
+
+
+def test_start_refreshes_the_mod_when_enabled(prefs_path, monkeypatch):
+    import clawd_tank_menubar.controller as controller_mod
+
+    class QuietDaemon:
+        def __init__(self, **kwargs):
+            pass
+
+        async def run(self):
+            return None
+
+    monkeypatch.setattr(controller_mod, "ClawdDaemon", QuietDaemon)
+    prefs_path.write_text(json.dumps(
+        {"ble_enabled": False, "sim_enabled": False, "claude_mod_enabled": True}))
+    controller, _view = make_controller(prefs_path)
+
+    controller.start()
+    controller._daemon_thread.join(timeout=2)
+
+    assert _mod_installed()
+    assert hooks.is_mod_enabled()
