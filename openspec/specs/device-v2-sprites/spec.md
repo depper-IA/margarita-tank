@@ -2,13 +2,13 @@
 
 ## Purpose
 
-The ESP32-C6 firmware (and the shared SDL2 simulator) render the redesigned v2 crab art for the 15 mapped animations at device render scale, with per-anim frame timing, looping behavior, and vertical placement preserved. The 7 animations with no v2 counterpart keep rendering v1 unchanged.
+The ESP32-C6 firmware (and the shared SDL2 simulator) render the redesigned v2 crab art for the 16 mapped animations at device render scale, with per-anim frame timing, looping behavior, and vertical placement preserved. The 6 animations with no v2 counterpart keep rendering v1 unchanged.
 
 ## Requirements
 
 ### Requirement: v2 Sprite Art Replacement
 
-The firmware MUST render v2 art, generated from the corresponding v2 SVG, for each of the 15 mapped animations: IDLE←idle, ALERT←notification, HAPPY←happy, SLEEPING←sleeping, THINKING←thinking, TYPING←typing, BUILDING←building, CONFUSED←confused, DIZZY←dizzy, SWEEPING←sweeping, DEBUGGER←debugger, CONDUCTING←conducting, WAKE←wake, LOW_BATTERY←low_battery, HAT_MISHAP←hat_mishap. No new animation enum SHALL be added and `waiting_reply` SHALL remain excluded (no device slot).
+The firmware MUST render v2 art, generated from the corresponding v2 SVG, for each of the 16 mapped animations: IDLE←idle, ALERT←notification, HAPPY←happy, SLEEPING←sleeping, THINKING←thinking, TYPING←typing, BUILDING←building, CONFUSED←confused, DIZZY←dizzy, SWEEPING←sweeping, DEBUGGER←debugger, CONDUCTING←conducting, WAKE←wake, LOW_BATTERY←low_battery, HAT_MISHAP←hat_mishap, BEACON←beacon. No new animation enum SHALL be added and `waiting_reply` SHALL remain excluded (no device slot).
 
 #### Scenario: Mapped anim renders v2 art
 
@@ -75,7 +75,7 @@ Each ported anim's `y_offset` MUST be set so the crab sits ground-aligned on the
 
 ### Requirement: No Regression for Non-v2 Anims
 
-The 7 anims with no v2 counterpart (DISCONNECTED, JUGGLING, WALKING, GOING_AWAY, WIZARD, BEACON, MINI_CLAWD) MUST continue to render their v1 art unchanged.
+The 6 anims with no v2 counterpart (DISCONNECTED, JUGGLING, WALKING, GOING_AWAY, WIZARD, MINI_CLAWD) MUST continue to render their v1 art unchanged. BEACON now has a v2 counterpart (`clawd-working-beacon-v2.svg`) and is covered by the v2 sprite requirements like any other ported anim.
 
 #### Scenario: v1 anims unchanged
 

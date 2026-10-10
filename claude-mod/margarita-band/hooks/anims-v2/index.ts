@@ -14,6 +14,7 @@ import { anim as v2_wake } from './wake'
 import { anim as v2_confused } from './confused'
 import { anim as v2_dizzy } from './dizzy'
 import { anim as v2_sweeping } from './sweeping'
+import { anim as v2_beacon } from './beacon'
 import { anim as v2_happy } from './happy'
 import { anim as v2_alert } from './alert'
 import type { V2Anim } from './types'
@@ -34,6 +35,7 @@ export const ANIMS_V2: Partial<Record<AnimName, V2Anim>> = {
   confused: v2_confused,
   dizzy: v2_dizzy,
   sweeping: v2_sweeping,
+  beacon: v2_beacon,
   happy: v2_happy,
   alert: v2_alert,
   idle_living: v2_idle,

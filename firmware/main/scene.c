@@ -325,7 +325,7 @@ static const anim_def_t anim_defs[] = {
         .looping = true,
         .width = BEACON_WIDTH,
         .height = BEACON_HEIGHT,
-        .y_offset = 4,
+        .y_offset = -21,   /* v2 regen (50x57): -9 + crop delta 12, pending visual gate */
     },
     [CLAWD_ANIM_WAKE] = {
         .rle_data = wake_rle_data,

@@ -62,7 +62,7 @@ test('decodes rows, runs and transparent cells', () => {
 
 test('every generated animation is well formed', () => {
   const entries = Object.entries(ANIMS_V2) as Array<[string, V2Anim]>
-  expect(entries.length).toBe(17) // 16 animations + the idle_living alias
+  expect(entries.length).toBe(18) // 17 animations + the idle_living alias
   for (const [name, a] of entries) {
     expect(a.height % 2, name).toBe(0)
     expect(a.width <= V2_MAX_WIDTH && a.height <= V2_MAX_HEIGHT, name).toBe(true)
@@ -81,13 +81,13 @@ test('firmware fps per animation', () => {
   const fps: Record<string, number> = {
     idle: 6, sleeping: 6, low_battery: 6, hat_mishap: 6,
     thinking: 8, typing: 8, debugger: 8, building: 8, conducting: 8, waiting_reply: 8,
-    wake: 8, confused: 8, dizzy: 8, sweeping: 8, happy: 10, alert: 10,
+    wake: 8, confused: 8, dizzy: 8, sweeping: 8, beacon: 8, happy: 10, alert: 10,
   }
   for (const [name, f] of Object.entries(fps)) expect(ANIMS_V2[name as keyof typeof ANIMS_V2]?.fps).toBe(f)
 })
 
 test('animations without v2 art fall back to the v1 poses', () => {
-  for (const name of ['wizard', 'beacon', 'juggling'] as const) {
+  for (const name of ['wizard', 'juggling'] as const) {
     expect(v2For(name, 'v2')).toBeUndefined()
     const { rows, width } = crabRows(name, 'v2', 0, 0, false)
     expect(width).toBe(15)

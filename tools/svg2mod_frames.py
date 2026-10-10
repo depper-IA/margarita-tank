@@ -41,6 +41,7 @@ FPS = {
     "idle": 6, "sleeping": 6, "low_battery": 6, "hat_mishap": 6,
     "thinking": 8, "typing": 8, "debugger": 8, "building": 8, "conducting": 8,
     "waiting_reply": 8, "wake": 8, "confused": 8, "dizzy": 8, "sweeping": 8,
+    "beacon": 8,
     "happy": 10, "alert": 10,
 }
 # mod AnimName -> v2 animation that plays it (the v2 idle art is the "living" idle).
