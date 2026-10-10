@@ -1,0 +1,73 @@
+schema: spec-driven
+
+context: |
+  Margarita Tank (fork of marciogranzotto/clawd-tank): physical BLE notification
+  display for Claude Code sessions. Multi-component monorepo.
+  - firmware/   ESP-IDF 5.3.2 C, ESP32-C6 (RISC-V), ST7789 320x172, LVGL 9.5, NimBLE
+  - host/       Python asyncio daemon + rumps(macOS)/pystray(Windows) tray app
+  - claude-mod/margarita-band/  TypeScript Claude Code plugin (side panel)
+  - tools/      Python asset pipeline (svg2frames/png2rgb565/svg2mod_frames)
+  - simulator/  SDL2 build compiling the same firmware source via shims
+  Style: conventional commits, no AI attribution / Co-Authored-By.
+  Remotes: origin=sam-wilkie/margarita-tank, upstream=marciogranzotto/clawd-tank.
+
+# Per-component testing. Components use SEPARATE Python environments:
+# host venv has pytest+bleak+Pillow but NOT numpy; the tools pipeline needs
+# the SYSTEM Python 3.11 (has Pillow+numpy+playwright+chromium).
+testing:
+  strict_tdd: true
+  components:
+    host:
+      test_command: "host\\.venv\\Scripts\\python.exe -m pytest"
+      framework: pytest + pytest-asyncio
+      test_count: 735
+      note: >
+        tests/test_daemon.py::test_ble_connects_and_reconnects_by_itself_after_a_scan_error
+        hangs (pre-existing, unrelated to any change). Exclude it or run with a
+        timeout, e.g. append:
+        --deselect "tests/test_daemon.py::test_ble_connects_and_reconnects_by_itself_after_a_scan_error"
+    firmware:
+      test_command: "make test"            # run in firmware/test/ (gcc + ASan/UBSan)
+      build_command: "idf.py build"        # run in firmware/ (ESP-IDF 5.3.2)
+      framework: plain C asserts
+      note: >
+        firmware/build/clawd-tank.bin exists (~2.25 MB of a ~7.94 MB app
+        partition). Do not use the bond-firmware MCP plugin; use idf.py directly.
+    tools:
+      test_command: "C:\\Users\\Matt\\AppData\\Local\\Programs\\Python\\Python311\\python.exe -m pytest tools/tests"
+      framework: pytest
+      note: >
+        MUST use system Python 3.11 (Pillow 12.3.0 + numpy 2.4.6 + playwright +
+        chromium). The host venv lacks numpy and cannot run the asset pipeline.
+    claude-mod:
+      validate_command: "claude plugin validate claude-mod/margarita-band"
+      framework: Claude Code plugin validation (TypeScript, tsconfig only)
+    simulator:
+      build_command: "cmake -B build && cmake --build build"   # run in simulator/ (needs SDL2)
+
+rules:
+  proposal:
+    - Include a rollback plan for risky changes (BLE protocol, hooks, installers).
+    - State which component(s) are affected: firmware / host / claude-mod / tools / simulator.
+  specs:
+    - Use Given/When/Then for scenarios.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY).
+  design:
+    - Document architecture decisions with rationale.
+    - Respect device constraints: BLE MTU 256B, 8 notification cap, LVGL 9.5 API, RGB565.
+    - If touching firmware + simulator, note that they share source via simulator/shims/.
+  tasks:
+    - Group by phase, use hierarchical numbering.
+    - Keep tasks completable in one session.
+    - Keep host and firmware Python environments separate; never cross-install deps.
+  apply:
+    - Follow existing code patterns.
+    tdd: true
+    test_command: "host\\.venv\\Scripts\\python.exe -m pytest"
+  verify:
+    test_command: "host\\.venv\\Scripts\\python.exe -m pytest --deselect \"tests/test_daemon.py::test_ble_connects_and_reconnects_by_itself_after_a_scan_error\""
+    build_command: "idf.py build"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas.
+    - Update TODO.md and CHANGELOG.md when a change ships.

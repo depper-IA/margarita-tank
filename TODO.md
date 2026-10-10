@@ -24,6 +24,20 @@ Custom app icon. Proactive BLE reconnection with full state sync on disconnect.
 
 ---
 
+## v2 crab art on the device (15 anims) — Implemented (firmware target build + full v1 re-check pending)
+
+- [x] 15 mapped anims regenerated from v2 SVGs at scale x3 via `tools/regen_v2_sprite.py`; `*_FRAME_MS` matched to v2 fps, `.looping` preserved, uniform `y_offset=-21`, `GRASS_HEIGHT` 14→24 in `scene.c`.
+- [x] Parametrized contract+heap test (dims, exact-pixel RLE decode, 73 KB ceiling), `frame_ms` simulator-capture test, and 7-header byte-identical no-regression guard — all green. SDL2 simulator builds clean.
+- [x] `tools/svg2frames.py` `.resolve()` Windows fix committed; pipeline runs under system Python 3.11.
+- [x] Render scale frozen at x3 after WAKE simulator review (x4 rejected for the 73 KB heap ceiling).
+- [ ] Build the firmware target: `idf.py build` was NOT run (idf.py not on PATH). The ESP32-C6 compile of `scene.c` + the 15 regenerated headers is UNVERIFIED — must build in an ESP-IDF 5.3.2 environment before flashing.
+- [ ] Re-check the remaining 5 v1 anims under the taller 24px grass band in the simulator: disconnected, going_away, wizard, beacon re-checked (aligned); mini_crab is a grass-independent HUD icon; walking + juggling could not be captured in isolation (transient internal anims) but share the same BOTTOM+y_offset mechanism with untouched v1 offsets, so low risk.
+- [ ] Not pushed / no PR opened — completed locally on branch `personal` (commits 501457b, 5028c08, 60f5efd, b4f4023, 7d80e27, e61dba2).
+
+### Follow-up (next change — do not do now)
+
+- [ ] Design the 7 missing v2 SVGs (beacon, wizard, juggling, walking, going_away, disconnected, mini_crab) so all device anims can be v2. The existing 15 v2 SVGs were authored with Claude Opus 5.5 (not the Gemini pipeline). Once the 7 SVGs exist, porting them is trivial via the proven `tools/regen_v2_sprite.py` + the parametrized contract test.
+
 ## BLE auto-reconnect (scan error killed the sender) — Fixed (live hardware untested)
 
 - [x] Root cause: a first-scan `BleakError` (macOS TCC check still running at app start) escaped `_connect_until_found` and ended `_transport_sender` silently. Scan errors are now retried with back-off, and `_transport_sender` restarts after a crash (logged with traceback).
