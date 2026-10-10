@@ -290,7 +290,65 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         return None
 
 
+    # Codex CLI reuses Claude's event vocabulary; only the session-id namespace,
+    # a couple of tool-name aliases and the card name differ. Keep this in sync
+    # with clawd_tank_daemon/codex_protocol.py.
+    CODEX_SESSION_PREFIX = "codex:"
+    CODEX_DISPLAY_NAME = "Codex"
+    CODEX_TOOL_ALIASES = {"shell": "Bash", "apply_patch": "Write", "local_shell": "Bash"}
+
+
+    def _codex_tool(raw):
+        if not raw:
+            return ""
+        if raw.startswith("mcp__"):
+            return raw
+        return CODEX_TOOL_ALIASES.get(raw, raw)
+
+
+    def codex_hook_to_message(hook):
+        """Convert a Codex CLI hook payload to a daemon message (namespaced)."""
+        event_name = hook.get("hook_event_name", "")
+        raw_sid = hook.get("session_id", "")
+        session_id = (CODEX_SESSION_PREFIX + raw_sid) if raw_sid else raw_sid
+        cwd = hook.get("cwd", "")
+        project = Path(cwd).name if cwd else ""
+        pid = None  # Codex has no claude.exe-style long-lived PID to resolve.
+
+        if event_name == "SessionStart":
+            msg = {"event": "session_start", "session_id": session_id, "project": project, "pid": pid}
+            source = hook.get("source") or hook.get("matcher")
+            if source is not None:
+                msg["source"] = source
+            return msg
+        if event_name == "PreToolUse":
+            return {"event": "tool_use", "session_id": session_id, "tool_name": _codex_tool(hook.get("tool_name", "")), "project": project, "pid": pid}
+        if event_name == "PostToolUse":
+            return {"event": "tool_done", "session_id": session_id, "tool_name": _codex_tool(hook.get("tool_name", "")), "project": project, "pid": pid}
+        if event_name == "PermissionRequest":
+            return {"event": "permission", "session_id": session_id, "tool_name": _codex_tool(hook.get("tool_name", "")), "project": project, "pid": pid}
+        if event_name == "PreCompact":
+            return {"event": "compact", "session_id": session_id, "pid": pid}
+        if event_name == "Stop":
+            return {"event": "add", "hook": "Stop", "session_id": session_id, "project": CODEX_DISPLAY_NAME, "message": "Esperando tu respuesta", "pid": pid}
+        if event_name == "UserPromptSubmit":
+            return {"event": "dismiss", "hook": "UserPromptSubmit", "session_id": session_id, "pid": pid}
+        if event_name == "SessionEnd":
+            msg = {"event": "dismiss", "hook": "SessionEnd", "session_id": session_id, "pid": pid}
+            reason = hook.get("reason")
+            if reason is not None:
+                msg["reason"] = reason
+            return msg
+        if event_name == "SubagentStart":
+            return {"event": "subagent_start", "session_id": session_id, "agent_id": hook.get("agent_id", ""), "pid": pid}
+        if event_name == "SubagentStop":
+            return {"event": "subagent_stop", "session_id": session_id, "agent_id": hook.get("agent_id", ""), "pid": pid}
+        return None
+
+
     def main():
+        # The agent is the first CLI arg ("codex"); default is Claude Code.
+        agent = sys.argv[1] if len(sys.argv) > 1 else "claude"
         try:
             raw = sys.stdin.read()
             if not raw.strip():
@@ -299,7 +357,7 @@ NOTIFY_SCRIPT = textwrap.dedent('''\
         except json.JSONDecodeError:
             sys.exit(1)
 
-        msg = hook_to_message(payload)
+        msg = codex_hook_to_message(payload) if agent == "codex" else hook_to_message(payload)
         if msg is None:
             sys.exit(0)
 
@@ -711,6 +769,126 @@ def build_hooks_config(command: str) -> dict:
 
 
 HOOKS_CONFIG = build_hooks_config(HOOK_COMMAND)
+
+
+# --- Codex CLI hooks ----------------------------------------------------------
+#
+# Codex reuses Claude's event vocabulary, so the SAME notify script handles it;
+# the trailing " codex" argument tells the script to use the Codex translator
+# (namespaced session ids + tool aliases). Config lives in ~/.codex/hooks.json,
+# a first-class Codex hook source that is plain JSON — so we edit it with the
+# same ownership discipline as ~/.claude/settings.json rather than rewriting the
+# user's config.toml (which we never touch).
+CODEX_HOOKS_PATH = Path.home() / ".codex" / "hooks.json"
+CODEX_HOOK_COMMAND = HOOK_COMMAND + " codex"
+
+
+def build_codex_hooks_config(command: str) -> dict:
+    """Codex hook groups, keyed by Codex lifecycle event. Codex matches tools with
+    a regex matcher; a group with no matcher fires on every occurrence of the
+    event. Mirrors the Claude set minus events Codex does not emit (StopFailure,
+    PostToolUseFailure); PostToolUse is scoped to the question tool like Claude."""
+    return {
+        "SessionStart": [{"hooks": [{"type": "command", "command": command}]}],
+        "UserPromptSubmit": [{"hooks": [{"type": "command", "command": command}]}],
+        "PreToolUse": [{"hooks": [{"type": "command", "command": command}]}],
+        "PostToolUse": [
+            {"matcher": ASK_USER_QUESTION_TOOL, "hooks": [{"type": "command", "command": command}]}
+        ],
+        "PermissionRequest": [{"hooks": [{"type": "command", "command": command}]}],
+        "PreCompact": [{"hooks": [{"type": "command", "command": command}]}],
+        "Stop": [{"hooks": [{"type": "command", "command": command}]}],
+        "SessionEnd": [{"hooks": [{"type": "command", "command": command}]}],
+        "SubagentStart": [{"hooks": [{"type": "command", "command": command}]}],
+        "SubagentStop": [{"hooks": [{"type": "command", "command": command}]}],
+    }
+
+
+CODEX_HOOKS_CONFIG = build_codex_hooks_config(CODEX_HOOK_COMMAND)
+
+
+def _load_codex_hooks() -> dict | None:
+    """Parse ~/.codex/hooks.json. Returns {} when absent/empty, None when it
+    exists but is not a readable JSON object (so we leave it untouched)."""
+    if not CODEX_HOOKS_PATH.exists():
+        return {}
+    try:
+        text = CODEX_HOOKS_PATH.read_text(encoding="utf-8-sig")
+        if not text.strip():
+            return {}
+        data = json.loads(text)
+    except (ValueError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def install_codex_hooks() -> bool:
+    """Merge our Codex hook groups into ~/.codex/hooks.json without clobbering the
+    user's own hooks, using the same ownership rule as the Claude installer:
+    prune only groups whose every command is ours, then append ours where absent.
+    The top-level "hooks" object holds the per-event groups (Codex's hooks.json
+    shape). Returns False, leaving the file untouched, when it cannot be parsed."""
+    CODEX_HOOKS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    data = _load_codex_hooks()
+    if data is None:
+        logger.warning("Not installing Codex hooks: %s is not readable JSON; left untouched", CODEX_HOOKS_PATH)
+        return False
+
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+
+    for event_name, our_entries in CODEX_HOOKS_CONFIG.items():
+        existing = hooks.get(event_name)
+        if not isinstance(existing, list):
+            existing = []
+        kept = [g for g in existing if not _is_our_managed_group(g)]
+        for our_entry in our_entries:
+            if not _our_hook_present(kept, _matcher_of(our_entry)):
+                kept.append(copy.deepcopy(our_entry))
+        hooks[event_name] = kept
+
+    _write_json_atomic(CODEX_HOOKS_PATH, data)
+    logger.info("Installed Codex hooks in %s", CODEX_HOOKS_PATH)
+    return True
+
+
+def uninstall_codex_hooks() -> bool:
+    """Remove our Codex hook groups from ~/.codex/hooks.json, with the same
+    ownership rule install uses: drop only groups that are purely ours, delete an
+    event list when emptied, and the "hooks" object when it empties. Idempotent;
+    the file is not rewritten when nothing of ours is in it. Returns True when no
+    hook of ours remains (including when the file is absent)."""
+    if not CODEX_HOOKS_PATH.exists():
+        return True
+    data = _load_codex_hooks()
+    if data is None:
+        logger.warning("Not uninstalling Codex hooks: %s is not readable JSON; left untouched", CODEX_HOOKS_PATH)
+        return False
+
+    hooks = data.get("hooks")
+    changed = False
+    if isinstance(hooks, dict):
+        for event_name, groups in list(hooks.items()):
+            if not isinstance(groups, list):
+                continue
+            kept = [g for g in groups if not _is_our_managed_group(g)]
+            if len(kept) == len(groups):
+                continue
+            changed = True
+            if kept:
+                hooks[event_name] = kept
+            else:
+                del hooks[event_name]
+        if changed and not hooks:
+            del data["hooks"]
+
+    if not changed:
+        return True
+    _write_json_atomic(CODEX_HOOKS_PATH, data)
+    logger.info("Uninstalled Codex hooks from %s", CODEX_HOOKS_PATH)
+    return True
 
 
 def install_notify_script() -> None:

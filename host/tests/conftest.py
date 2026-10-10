@@ -58,6 +58,12 @@ def sandbox_home(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(hooks, "CLAUDE_SETTINGS_PATH", home / ".claude" / "settings.json")
     monkeypatch.setattr(hooks, "HOOK_COMMAND", command)
     monkeypatch.setattr(hooks, "HOOKS_CONFIG", hooks.build_hooks_config(command))
+    # Codex hooks derive from the same sandboxed command + a hooks.json under the
+    # sandbox home, so they move with everything else.
+    codex_command = command + " codex"
+    monkeypatch.setattr(hooks, "CODEX_HOOKS_PATH", home / ".codex" / "hooks.json")
+    monkeypatch.setattr(hooks, "CODEX_HOOK_COMMAND", codex_command)
+    monkeypatch.setattr(hooks, "CODEX_HOOKS_CONFIG", hooks.build_codex_hooks_config(codex_command))
     sl_script = clawd_dir / hooks.STATUSLINE_SCRIPT_PATH.name
     monkeypatch.setattr(hooks, "STATUSLINE_SCRIPT_PATH", sl_script)
     monkeypatch.setattr(hooks, "MOD_DIR", clawd_dir / "claude-mod" / hooks.MOD_NAME)
