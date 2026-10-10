@@ -87,11 +87,22 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 #define DAY_DAWN_END_MIN     (9 * 60)    /* 09:00 — full daytime sky            */
 #define DAY_DUSK_START_MIN   (17 * 60)   /* 17:00 — daytime begins fading out   */
 #define DAY_DUSK_END_MIN     (18 * 60)   /* 18:00 — full night sky              */
-#define SUN_SHOW_MIN         (9 * 60)    /* 09:00 — sun appears                  */
-#define SUN_HIDE_MIN         (16 * 60)   /* 16:00 — sun disappears               */
-#define MOON_SHOW_MIN        (21 * 60)   /* 21:00 — moon appears                 */
-/* Moon stays up until dawn (DAY_DAWN_END_MIN) the next morning. */
-#define ASTRO_FADE_MIN       15          /* fade-in/out span for sun & moon (min) */
+/* Sun and moon now travel an east-to-west arc tied to the hour (see
+ * scene_place_astro_arc). The sun is up for the daylight half 06:00-18:00
+ * (sunrise -> noon zenith -> sunset); the moon takes the night half 18:00-06:00
+ * (moonrise -> midnight zenith -> moonset). */
+#define SUN_SHOW_MIN         (6 * 60)    /* 06:00 — sunrise, enters at the left   */
+#define SUN_HIDE_MIN         (18 * 60)   /* 18:00 — sunset, exits at the right     */
+#define MOON_SHOW_MIN        (18 * 60)   /* 18:00 — moonrise                       */
+/* Moon stays up until sunrise (SUN_SHOW_MIN) the next morning. */
+#define ASTRO_FADE_MIN       20          /* fade-in/out span for sun & moon (min) */
+
+/* Arc geometry: the astro sweeps X left->right and Y as a parabola (low at the
+ * horizon edges, high at the zenith). Tuned to clear the top usage bar. */
+#define ARC_X_LEFT           6           /* x at rise (left horizon)               */
+#define ARC_X_RIGHT          (320 - ARC_X_LEFT - ASTRO_SIZE)  /* x at set (right)  */
+#define ARC_Y_HORIZON        118         /* y of the astro at the horizon edges    */
+#define ARC_Y_ZENITH         48          /* y at the top of the arc (noon/midnight)*/
 
 /* Sky gradient palette (top color, bottom color) for each cycle keyframe. */
 #define SKY_NIGHT_TOP      0x0a0e1a
@@ -105,9 +116,31 @@ LV_FONT_DECLARE(clawd_font_clock_24);
 
 #define SUN_COLOR          0xFFD54A
 #define MOON_COLOR         0xE8E8F0
-#define ASTRO_SIZE         22          /* diameter in px of sun / moon disc */
+#define ASTRO_SIZE         34          /* diameter in px of sun / moon disc */
 #define ASTRO_X            290         /* right edge of the 320px scene */
 #define ASTRO_Y            44          /* lowered so it clears the top usage bar */
+
+/* ---------- Mario-style parallax background (rolling hills + cartoon clouds) ----------
+ * Rounded green hills sit behind the grass and puffy white clouds drift in the sky,
+ * echoing the classic side-scroller look (no coins or pipes). Hills and clouds are plain
+ * LVGL objects with a big corner radius; the day/night cycle tints them like the sky so
+ * they read as daytime scenery and recede into the night. */
+#define HILL_COUNT         3
+#define HILL_DAY_COLOR     0x5fbf4f   /* bright grass-green hill in daylight */
+#define HILL_NIGHT_COLOR   0x1c2e22   /* desaturated dark hill at night      */
+#define CLOUD_COUNT        3          /* number of distinct clouds in the sky */
+#define CLOUD_PUFFS        3          /* max puffs per cloud (fewer allowed)  */
+#define CLOUD_DAY_COLOR    0xFFFFFF   /* white puffs in daylight             */
+#define CLOUD_NIGHT_COLOR  0x3a4258   /* dim blue-grey puffs at night        */
+#define HILL_HILIGHT_COLOR 0x7fd56a   /* lighter dome highlight (sunlit side) */
+
+/* Ground texture: a bright grass-blade rim on top, a darker soil band below,
+ * and little soil speckles so the floor is not a flat gradient. */
+#define GRASS_RIM_COLOR    0x6fbf5a   /* bright sunlit grass edge on top      */
+#define GRASS_BLADE_COLOR  0x4f8f3f   /* grass tufts                          */
+#define SOIL_COLOR         0x6b4a2d   /* earthy brown soil under the grass    */
+#define SOIL_DARK_COLOR    0x4e3420   /* darker soil speckles                 */
+#define GRASS_RIM_H        3          /* height of the bright top rim (px)    */
 
 /* Frame timing in ms per animation.
  * 6fps anims use (1000 + 3) / 6 == 167 so integer division rounds to nearest
@@ -411,6 +444,24 @@ static const struct {
     {160, 30, 3, {.red = 0x88, .green = 0xFF, .blue = 0xCC} },  /* #88ffcc */
 };
 
+/* ---------- Cloud config ---------- */
+
+/* Each cloud has its own shape (puff cluster) and its own gentle drift speed, so
+ * they look like distinct clouds moving independently instead of identical clones
+ * marching in step. A puff is {dx, dy, diameter} from the cloud's left anchor;
+ * unused puff slots have d == 0 and are skipped. Shared by scene_create (placement)
+ * and scene_tick (drift). */
+static const struct {
+    int x, y;                                  /* initial anchor (x drifts)      */
+    int drift_ms;                              /* ms per 1px step (bigger = slower) */
+    int span;                                  /* cluster width, for wrap-around  */
+    struct { int dx, dy, d; } puff[CLOUD_PUFFS];
+} cloud_cfg[CLOUD_COUNT] = {
+    /* small, low, slowest   */ { 40,  58, 760, 30, { {0, 4, 12}, {9, 0, 15}, {0, 0, 0} } },
+    /* big, high, medium     */ { 170, 46, 560, 46, { {0, 8, 16}, {12, 2, 22}, {28, 7, 15} } },
+    /* medium, mid, slower   */ { 255, 66, 640, 36, { {0, 5, 13}, {10, 0, 18}, {22, 6, 11} } },
+};
+
 /* ---------- Scene struct ---------- */
 
 struct scene_t {
@@ -418,6 +469,14 @@ struct scene_t {
 
     /* Sky */
     lv_obj_t *sky;
+
+    /* Mario-style scenery: rolling hills behind the grass, cartoon clouds in the sky.
+     * Tinted by the day/night cycle alongside the sky. Clouds drift left and wrap. */
+    lv_obj_t *hills[HILL_COUNT];
+    lv_obj_t *clouds[CLOUD_COUNT][CLOUD_PUFFS];
+    int cloud_x[CLOUD_COUNT];            /* current left anchor of each cloud (px) */
+    int cloud_y[CLOUD_COUNT];            /* fixed vertical band of each cloud (px) */
+    uint32_t cloud_next_move[CLOUD_COUNT]; /* next tick to step each cloud (own speed) */
 
     /* Stars */
     lv_obj_t *stars[STAR_COUNT];
@@ -643,6 +702,61 @@ scene_t *scene_create(lv_obj_t *parent)
     lv_obj_set_style_bg_grad_color(s->sky, lv_color_hex(0x1a1a2e), 0);
     lv_obj_set_style_bg_grad_dir(s->sky, LV_GRAD_DIR_VER, 0);
 
+    /* Rolling hills — big rounded green mounds poking up behind the grass line.
+     * Each is a tall rounded rect whose bottom is hidden under the grass, leaving
+     * a dome visible. Drawn right after the sky so clouds, astros and sprites
+     * all layer on top. Colour is set by the first scene_apply_daylight(). */
+    static const struct { int x, w, h; } hill_cfg[HILL_COUNT] = {
+        { -10, 90, 70 },   /* left mound  */
+        { 120, 120, 90 },  /* centre mound (tallest) */
+        { 240, 100, 64 },  /* right mound */
+    };
+    for (int i = 0; i < HILL_COUNT; i++) {
+        s->hills[i] = lv_obj_create(s->container);
+        lv_obj_remove_style_all(s->hills[i]);
+        lv_obj_set_size(s->hills[i], hill_cfg[i].w, hill_cfg[i].h);
+        /* Bottom sits GRASS_HEIGHT - a few px below the grass top so the dome
+         * rises out of the grass; the lower half is covered by the grass strip. */
+        lv_obj_set_pos(s->hills[i], hill_cfg[i].x,
+                       SCENE_HEIGHT - GRASS_HEIGHT - hill_cfg[i].h + 20);
+        lv_obj_set_style_bg_opa(s->hills[i], LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(s->hills[i], lv_color_hex(HILL_DAY_COLOR), 0);
+        lv_obj_set_style_radius(s->hills[i], hill_cfg[i].w / 2, 0);
+
+        /* Sunlit highlight: a smaller, lighter dome nudged to the upper-left of
+         * the mound so it reads as rounded volume instead of a flat blob. It is
+         * a child of the hill, so it rides along and never counts as an orphan. */
+        lv_obj_t *hl = lv_obj_create(s->hills[i]);
+        lv_obj_remove_style_all(hl);
+        lv_obj_set_size(hl, hill_cfg[i].w / 2, hill_cfg[i].h / 2);
+        lv_obj_set_pos(hl, hill_cfg[i].w / 6, hill_cfg[i].h / 6);
+        lv_obj_set_style_bg_opa(hl, LV_OPA_60, 0);
+        lv_obj_set_style_bg_color(hl, lv_color_hex(HILL_HILIGHT_COLOR), 0);
+        lv_obj_set_style_radius(hl, hill_cfg[i].w / 4, 0);
+    }
+
+    /* Cartoon clouds — each a cluster of three overlapping rounded puffs, like the
+     * classic side-scroller sky. They drift left over time (see scene_tick) and
+     * wrap around. Colour is set by the day/night cycle. */
+    for (int c = 0; c < CLOUD_COUNT; c++) {
+        s->cloud_x[c] = cloud_cfg[c].x;
+        s->cloud_y[c] = cloud_cfg[c].y;
+        s->cloud_next_move[c] = 0;  /* each cloud drifts on its own clock */
+        for (int p = 0; p < CLOUD_PUFFS; p++) {
+            int d = cloud_cfg[c].puff[p].d;
+            if (d == 0) { s->clouds[c][p] = NULL; continue; }  /* unused puff slot */
+            lv_obj_t *o = lv_obj_create(s->container);
+            lv_obj_remove_style_all(o);
+            lv_obj_set_size(o, d, d);
+            lv_obj_set_pos(o, s->cloud_x[c] + cloud_cfg[c].puff[p].dx,
+                           s->cloud_y[c] + cloud_cfg[c].puff[p].dy);
+            lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+            lv_obj_set_style_bg_color(o, lv_color_hex(CLOUD_DAY_COLOR), 0);
+            lv_obj_set_style_radius(o, d / 2, 0);
+            s->clouds[c][p] = o;
+        }
+    }
+
     /* Stars */
     uint32_t now = lv_tick_get();
     for (int i = 0; i < STAR_COUNT; i++) {
@@ -685,29 +799,83 @@ scene_t *scene_create(lv_obj_t *parent)
     lv_obj_set_style_border_opa(s->moon, LV_OPA_40, 0);
     lv_obj_add_flag(s->moon, LV_OBJ_FLAG_HIDDEN);
 
+    /* Z-order: the sun and moon are celestial — they rise from BEHIND the hills
+     * at the horizon and set behind them, and the clouds pass in front higher
+     * up. So they sit right above the sky (child 0) and below everything else:
+     * index 1 (sun) and 2 (moon), pushing the hills to 3..HILL_COUNT+2. */
+    lv_obj_move_to_index(s->sun, 1);
+    lv_obj_move_to_index(s->moon, 2);
+
+    /* Depth trick: the big centre cloud (index 1) is the "far" one — it drifts
+     * BEHIND the hills, so a mound partly eclipses it as it passes. The other
+     * two clouds stay in front. Move its puffs just above sun/moon (indices
+     * 3..) so they land below the hills, which shift up accordingly. */
+    for (int p = 0, idx = 3; p < CLOUD_PUFFS; p++) {
+        if (s->clouds[1][p]) lv_obj_move_to_index(s->clouds[1][p], idx++);
+    }
+
     s->daylight_last_min = -1;  /* force first scene_update_time() to apply */
 
-    /* Grass strip at bottom */
+    /* Ground: a soil band (brown gradient) with a grassy green cap on top. The
+     * grass sits as a thin strip over the soil, with a bright rim, tufts and
+     * soil speckles so the floor reads as textured earth, not a flat bar. */
     s->grass = lv_obj_create(s->container);
     lv_obj_remove_style_all(s->grass);
     lv_obj_set_size(s->grass, lv_pct(100), GRASS_HEIGHT);
     lv_obj_align(s->grass, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_opa(s->grass, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(s->grass, lv_color_hex(0x2d4a2d), 0);
-    lv_obj_set_style_bg_grad_color(s->grass, lv_color_hex(0x1a331a), 0);
+    lv_obj_set_style_bg_color(s->grass, lv_color_hex(SOIL_COLOR), 0);
+    lv_obj_set_style_bg_grad_color(s->grass, lv_color_hex(SOIL_DARK_COLOR), 0);
     lv_obj_set_style_bg_grad_dir(s->grass, LV_GRAD_DIR_VER, 0);
 
-    /* Grass tufts — small lighter rectangles */
-    static const struct { int x; int w; } tufts[] = {
-        {8, 3}, {25, 2}, {50, 4}, {78, 2}, {100, 3}, {130, 2}, {155, 3},
+    /* Green grass cap over the top third of the strip. */
+    int grass_cap_h = GRASS_HEIGHT / 2;
+    lv_obj_t *cap = lv_obj_create(s->grass);
+    lv_obj_remove_style_all(cap);
+    lv_obj_set_size(cap, lv_pct(100), grass_cap_h);
+    lv_obj_set_pos(cap, 0, 0);
+    lv_obj_set_style_bg_opa(cap, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(cap, lv_color_hex(0x2d4a2d), 0);
+    lv_obj_set_style_bg_grad_color(cap, lv_color_hex(0x24401f), 0);
+    lv_obj_set_style_bg_grad_dir(cap, LV_GRAD_DIR_VER, 0);
+
+    /* Bright sunlit rim along the very top edge of the grass. */
+    lv_obj_t *rim = lv_obj_create(s->grass);
+    lv_obj_remove_style_all(rim);
+    lv_obj_set_size(rim, lv_pct(100), GRASS_RIM_H);
+    lv_obj_set_pos(rim, 0, 0);
+    lv_obj_set_style_bg_opa(rim, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(rim, lv_color_hex(GRASS_RIM_COLOR), 0);
+
+    /* Grass blades — small two-tone tufts poking up along the rim, denser than
+     * before so the edge looks like grass rather than a line. */
+    static const struct { int x, w, h; } blade[] = {
+        {6, 2, 4}, {14, 3, 5}, {22, 2, 3}, {34, 3, 5}, {44, 2, 4}, {56, 3, 6},
+        {68, 2, 3}, {80, 3, 5}, {92, 2, 4}, {104, 3, 5}, {118, 2, 3}, {130, 3, 6},
+        {142, 2, 4}, {156, 3, 5}, {170, 2, 3}, {184, 3, 5}, {200, 2, 4},
+        {216, 3, 5}, {232, 2, 3}, {248, 3, 6}, {266, 2, 4}, {284, 3, 5}, {302, 2, 4},
     };
-    for (int i = 0; i < (int)(sizeof(tufts) / sizeof(tufts[0])); i++) {
-        lv_obj_t *tuft = lv_obj_create(s->grass);
-        lv_obj_remove_style_all(tuft);
-        lv_obj_set_size(tuft, tufts[i].w, 3);
-        lv_obj_set_pos(tuft, tufts[i].x, 0);
-        lv_obj_set_style_bg_opa(tuft, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(tuft, lv_color_hex(0x3d6a3d), 0);
+    for (int i = 0; i < (int)(sizeof(blade) / sizeof(blade[0])); i++) {
+        lv_obj_t *b = lv_obj_create(s->grass);
+        lv_obj_remove_style_all(b);
+        lv_obj_set_size(b, blade[i].w, blade[i].h);
+        lv_obj_set_pos(b, blade[i].x, -blade[i].h + GRASS_RIM_H);
+        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(b, lv_color_hex(GRASS_BLADE_COLOR), 0);
+    }
+
+    /* Soil speckles — tiny dark dots scattered in the brown band for texture. */
+    static const struct { int x, y, s; } speck[] = {
+        {18, 16, 2}, {52, 19, 2}, {74, 15, 1}, {110, 18, 2}, {138, 16, 1},
+        {166, 19, 2}, {198, 15, 2}, {224, 18, 1}, {258, 16, 2}, {292, 19, 2},
+    };
+    for (int i = 0; i < (int)(sizeof(speck) / sizeof(speck[0])); i++) {
+        lv_obj_t *sp = lv_obj_create(s->grass);
+        lv_obj_remove_style_all(sp);
+        lv_obj_set_size(sp, speck[i].s, speck[i].s);
+        lv_obj_set_pos(sp, speck[i].x, speck[i].y);
+        lv_obj_set_style_bg_opa(sp, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(sp, lv_color_hex(SOIL_DARK_COLOR), 0);
     }
 
     /* Clawd sprite slots — initialize all, activate slot 0 */
@@ -928,6 +1096,11 @@ void scene_set_width(scene_t *scene, int width_px, int anim_ms)
             if (!is_known) {
                 for (int si = 0; si < STAR_COUNT && !is_known; si++)
                     if (scene->stars[si] == child) is_known = true;
+                for (int si = 0; si < HILL_COUNT && !is_known; si++)
+                    if (scene->hills[si] == child) is_known = true;
+                for (int ci2 = 0; ci2 < CLOUD_COUNT && !is_known; ci2++)
+                    for (int pi = 0; pi < CLOUD_PUFFS && !is_known; pi++)
+                        if (scene->clouds[ci2][pi] == child) is_known = true;
                 for (int si = 0; si < MAX_SLOTS && !is_known; si++)
                     if (scene->slots[si].sprite_img == child) is_known = true;
             }
@@ -1102,6 +1275,22 @@ static uint32_t lerp_hex(uint32_t a, uint32_t b, int t)
     return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)bl;
 }
 
+/* Place an astro along its east-to-west arc. `frac` is the position in the
+ * visibility window, 0..255 (0 = rising at the left horizon, 255 = setting at
+ * the right). X moves linearly; Y follows a parabola 4f(1-f) that is 0 at the
+ * horizon edges and 1 at the zenith (noon/midnight), so the disc rises, peaks
+ * and sets like the real sun — no trig needed, integer math only. */
+static void scene_place_astro_arc(lv_obj_t *astro, int frac)
+{
+    if (frac < 0) frac = 0;
+    if (frac > 255) frac = 255;
+    int x = ARC_X_LEFT + ((ARC_X_RIGHT - ARC_X_LEFT) * frac) / 255;
+    /* height = 4 * f * (1 - f), scaled to 0..255 (peak 255 at frac=128). */
+    int height = (4 * frac * (255 - frac)) / 255;   /* 0..255 */
+    int y = ARC_Y_HORIZON - ((ARC_Y_HORIZON - ARC_Y_ZENITH) * height) / 255;
+    lv_obj_set_pos(astro, x, y);
+}
+
 /* Fade an astro (sun/moon) in/out: fully shown across [show, hide], ramping
  * its opacity over ASTRO_FADE_MIN at each edge. Outside the window it is
  * hidden entirely so it never occludes anything. Handles a window that does
@@ -1178,20 +1367,52 @@ static void scene_apply_daylight(scene_t *scene, int hour, int minute)
     lv_obj_set_style_bg_color(scene->sky, lv_color_hex(top), 0);
     lv_obj_set_style_bg_grad_color(scene->sky, lv_color_hex(bot), 0);
 
-    /* Sun: simple non-wrapping window 09:00-16:00. */
-    apply_astro_window(scene->sun, m, SUN_SHOW_MIN, SUN_HIDE_MIN);
+    /* Daylight weight 0..255 for the Mario scenery: full colour by day, dark at
+     * night, interpolated across dawn/dusk so hills and clouds fade with the sky. */
+    int day_t;
+    if (m < DAY_DAWN_START_MIN || m >= DAY_DUSK_END_MIN) {
+        day_t = 0;                                              /* night */
+    } else if (m < DAY_DAWN_END_MIN) {
+        day_t = ((m - DAY_DAWN_START_MIN) * 255) / (DAY_DAWN_END_MIN - DAY_DAWN_START_MIN);
+    } else if (m < DAY_DUSK_START_MIN) {
+        day_t = 255;                                            /* full day */
+    } else {
+        day_t = ((DAY_DUSK_END_MIN - m) * 255) / (DAY_DUSK_END_MIN - DAY_DUSK_START_MIN);
+    }
+    uint32_t hill_c = lerp_hex(HILL_NIGHT_COLOR, HILL_DAY_COLOR, day_t);
+    uint32_t cloud_c = lerp_hex(CLOUD_NIGHT_COLOR, CLOUD_DAY_COLOR, day_t);
+    for (int i = 0; i < HILL_COUNT; i++)
+        lv_obj_set_style_bg_color(scene->hills[i], lv_color_hex(hill_c), 0);
+    for (int c = 0; c < CLOUD_COUNT; c++)
+        for (int p = 0; p < CLOUD_PUFFS; p++)
+            if (scene->clouds[c][p])
+                lv_obj_set_style_bg_color(scene->clouds[c][p], lv_color_hex(cloud_c), 0);
 
-    /* Moon: 21:00 → next-day dawn (06:00). The window wraps midnight, so split
-     * it into the pre-midnight and post-midnight halves. Fade only happens at
-     * the real 21:00 edge and the 06:00 edge, never at the midnight seam. */
+    /* Sun: daylight half 06:00-18:00, fading at the edges AND sweeping the arc.
+     * frac = position within the 12h window, 0..255. */
+    apply_astro_window(scene->sun, m, SUN_SHOW_MIN, SUN_HIDE_MIN);
+    if (m >= SUN_SHOW_MIN && m <= SUN_HIDE_MIN) {
+        int frac = ((m - SUN_SHOW_MIN) * 255) / (SUN_HIDE_MIN - SUN_SHOW_MIN);
+        scene_place_astro_arc(scene->sun, frac);
+    }
+
+    /* Moon: night half 18:00 → next-day 06:00 (wraps midnight). The arc is a
+     * single 12h sweep: map the wrapped minute onto 0..720 before taking frac,
+     * so moonrise is at the left, midnight at the zenith, moonset at the right.
+     * The fade windows are split at the midnight seam like before. */
+    int moon_rel = -1;
     if (m >= MOON_SHOW_MIN) {
-        /* Evening half: 21:00..24:00. No "hide" fade before midnight. */
         apply_astro_window(scene->moon, m, MOON_SHOW_MIN, 24 * 60);
-    } else if (m <= DAY_DAWN_END_MIN) {
-        /* Morning half: 00:00..06:00 (dawn). No "show" fade after midnight. */
-        apply_astro_window(scene->moon, m, 0, DAY_DAWN_END_MIN);
+        moon_rel = m - MOON_SHOW_MIN;                 /* 0..360 (18:00..24:00) */
+    } else if (m <= SUN_SHOW_MIN) {
+        apply_astro_window(scene->moon, m, 0, SUN_SHOW_MIN);
+        moon_rel = (24 * 60 - MOON_SHOW_MIN) + m;     /* 360..720 (00:00..06:00) */
     } else {
         lv_obj_add_flag(scene->moon, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (moon_rel >= 0) {
+        int night_span = (24 * 60 - MOON_SHOW_MIN) + SUN_SHOW_MIN;  /* 720 min */
+        scene_place_astro_arc(scene->moon, (moon_rel * 255) / night_span);
     }
 
     /* Stars only at night — hidden across the full daytime span (dawn end →
@@ -1560,6 +1781,23 @@ void scene_tick(scene_t *scene)
                 lv_obj_set_style_bg_opa(scene->stars[i], next, 0);
                 scene->star_next_toggle[i] = now + random_range(STAR_TWINKLE_MIN, STAR_TWINKLE_MAX);
             }
+        }
+    }
+
+    /* Cloud drift — each cloud glides left on its OWN clock (cloud_cfg[c].drift_ms)
+     * so they move at different gentle speeds and never march in lock-step. When a
+     * cloud's cluster clears the left edge, it wraps back past the right edge. */
+    for (int c = 0; c < CLOUD_COUNT; c++) {
+        if (now < scene->cloud_next_move[c]) continue;
+        scene->cloud_next_move[c] = now + cloud_cfg[c].drift_ms;
+        scene->cloud_x[c] -= 1;
+        if (scene->cloud_x[c] + cloud_cfg[c].span < 0)
+            scene->cloud_x[c] = 320;   /* re-enter from the right edge */
+        for (int p = 0; p < CLOUD_PUFFS; p++) {
+            if (!scene->clouds[c][p]) continue;
+            lv_obj_set_pos(scene->clouds[c][p],
+                           scene->cloud_x[c] + cloud_cfg[c].puff[p].dx,
+                           scene->cloud_y[c] + cloud_cfg[c].puff[p].dy);
         }
     }
 

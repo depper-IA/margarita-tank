@@ -2,7 +2,10 @@ MIT License
 
 Copyright (c) 2026 Marcio Granzotto Rodrigues (original project: Clawd Tank)
 Copyright (c) 2026 Sam Wilkie (modifications: usage status bar, "Margarita"
-rebrand, Spanish localization, UI-task watchdog fix, adaptive session pruning)
+rebrand, Spanish localization, UI-task watchdog fix, adaptive session pruning,
+v2 sprite redesign and additional animations, animated scene background
+(rolling hills, drifting clouds, hour-based sun/moon arc, textured ground),
+Claude Code side-pane mod, Windows tray app and installer)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
