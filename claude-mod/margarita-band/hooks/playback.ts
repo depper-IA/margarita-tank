@@ -1,6 +1,6 @@
 import type { AnimName, Style } from '../types'
 import { drawAnim } from './anims'
-import { toRows, type Run } from './anims/kit'
+import { scaleGrid, toRows, type Run } from './anims/kit'
 import { ANIMS_V2, V2_MAX_HEIGHT, V2_MAX_WIDTH } from './anims-v2'
 import { decodeFrame, frameIndex } from './anims-v2/decode'
 import type { V2Anim } from './anims-v2/types'
@@ -10,15 +10,24 @@ export const DEFAULT_STYLE: Style = 'v2'
 export const V1_COLUMNS = 20
 // Free columns around the widest v2 frame.
 export const V2_MARGIN = 2
+// Proportional shrink for the v2 crab: both width and height scale by this, so it takes less of
+// the pane without stretching. 1 = original size; lower = smaller. 2/3 keeps the pixel art legible.
+export const V2_SCALE = 2 / 3
+
+// Scaled pixel size of the reserved crab area, matching scaleGrid's even-height rule so the
+// pane width and the fixed row count track the shrunk art.
+const scaledWidth = (pixels: number): number => Math.max(1, Math.round(pixels * V2_SCALE))
+const scaledTextRows = (pixels: number): number => Math.max(1, Math.round((pixels / 2) * V2_SCALE))
 // Timer period: the finest frame step (10 fps = 100 ms) needs a tick at most every 125 ms.
 export const TICK_MS = 125
 // The v1 pose functions still advance once per 450 ms, as before.
 export const V1_TICK_MS = 450
 
-export const paneColumns = (style: Style): number => (style === 'v2' ? V2_MAX_WIDTH + V2_MARGIN : V1_COLUMNS)
+export const paneColumns = (style: Style): number =>
+  style === 'v2' ? scaledWidth(V2_MAX_WIDTH) + V2_MARGIN : V1_COLUMNS
 
 // Text rows the crab area keeps, so the labels below do not move between animations.
-export const crabRowCount = (style: Style): number => (style === 'v2' ? V2_MAX_HEIGHT / 2 : 8)
+export const crabRowCount = (style: Style): number => (style === 'v2' ? scaledTextRows(V2_MAX_HEIGHT) : 8)
 
 export const v2For = (name: AnimName, style: Style): V2Anim | undefined => (style === 'v2' ? ANIMS_V2[name] : undefined)
 
@@ -38,7 +47,10 @@ export function crabRows(
   preview: boolean,
 ): { rows: Run[][]; width: number } {
   const a = v2For(name, style)
-  if (a) return { rows: toRows(decodeFrame(a, v2Index(a, name, elapsedMs, preview))), width: a.width }
+  if (a) {
+    const grid = scaleGrid(decodeFrame(a, v2Index(a, name, elapsedMs, preview)), V2_SCALE)
+    return { rows: toRows(grid), width: grid[0]?.length ?? 0 }
+  }
   return { rows: toRows(drawAnim(name, v1Step)), width: 15 }
 }
 

@@ -123,3 +123,28 @@ export function toRows(g: Grid): Run[][] {
   }
   return rows
 }
+
+// Shrinks a pixel grid by `factor` (0 < factor <= 1) with nearest-neighbour sampling, keeping
+// the aspect ratio: width and height scale by the same amount, so the crab gets smaller without
+// stretching. The output height is forced even (toRows packs two pixel rows per text row, and an
+// odd height would silently drop the bottom row), so we size by text rows and double. factor >= 1
+// returns the grid unchanged.
+export function scaleGrid(g: Grid, factor: number): Grid {
+  if (factor >= 1 || g.length === 0) return g
+  const srcH = g.length
+  const srcW = g[0]?.length ?? 0
+  const outTextRows = Math.max(1, Math.round((srcH / 2) * factor))
+  const outH = outTextRows * 2
+  const outW = Math.max(1, Math.round(srcW * factor))
+  const out: Grid = []
+  for (let y = 0; y < outH; y += 1) {
+    const sy = Math.min(srcH - 1, Math.floor((y * srcH) / outH))
+    const row: Array<string | null> = []
+    for (let x = 0; x < outW; x += 1) {
+      const sx = Math.min(srcW - 1, Math.floor((x * srcW) / outW))
+      row.push(g[sy]![sx] ?? null)
+    }
+    out.push(row)
+  }
+  return out
+}

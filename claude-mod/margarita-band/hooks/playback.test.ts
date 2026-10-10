@@ -13,7 +13,13 @@ import {
   v2For,
   v2Index,
   V2_MARGIN,
+  V2_SCALE,
 } from './playback'
+import { scaleGrid } from './anims/kit'
+
+// Mirrors scaleGrid's even-height sizing so the tests predict the shrunk dimensions.
+const scaledW = (px: number) => Math.max(1, Math.round(px * V2_SCALE))
+const scaledRows = (px: number) => Math.max(1, Math.round((px / 2) * V2_SCALE))
 
 // 2 colours, 3 stored frames lasting 2 + 1 + 3 source frames at 10 fps (100 ms each).
 const TINY: V2Anim = {
@@ -95,19 +101,39 @@ test('style v1 never uses v2 art, v2 does', () => {
   expect(v2For('idle', 'v1')).toBeUndefined()
   expect(crabRows('idle', 'v1', 0, 0, false).width).toBe(15)
   const v2 = crabRows('idle', 'v2', 0, 0, false)
-  expect(v2.width).toBe(ANIMS_V2.idle!.width)
-  expect(v2.rows.length).toBe(ANIMS_V2.idle!.height / 2)
-  // v2 rows are as wide as the animation
+  // v2 art is shrunk proportionally by V2_SCALE before rendering.
+  expect(v2.width).toBe(scaledW(ANIMS_V2.idle!.width))
+  expect(v2.rows.length).toBe(scaledRows(ANIMS_V2.idle!.height))
+  // v2 rows are as wide as the scaled animation
   const cells = v2.rows[0]!.reduce((n, r) => n + r.n, 0)
   expect(cells).toBe(v2.width)
 })
 
+test('scaleGrid shrinks proportionally and keeps an even height', () => {
+  // A 10x8 solid grid at factor 0.5 -> 5 wide, 4 tall (even), still solid.
+  const g = Array.from({ length: 8 }, () => Array<string | null>(10).fill('#DE886D'))
+  const half = scaleGrid(g, 0.5)
+  expect(half.length).toBe(4)
+  expect(half[0]!.length).toBe(5)
+  expect(half.every(r => r.every(c => c === '#DE886D'))).toBe(true)
+  // Odd-rounding never yields an odd height (toRows would drop the last pixel row otherwise).
+  for (const factor of [0.3, 0.4, 0.6, 0.66, 0.75]) {
+    expect(scaleGrid(g, factor).length % 2).toBe(0)
+  }
+  // factor >= 1 is a no-op (same reference, no upscaling).
+  expect(scaleGrid(g, 1)).toBe(g)
+  // Transparency is preserved.
+  const t = [[null, '#fff'], ['#000', null]] as Array<Array<string | null>>
+  expect(scaleGrid(t, 1)).toBe(t)
+})
+
 test('half blocks: top pixel is foreground, bottom background', () => {
-  // happy at t=0 has its crab on the lower rows; find a two-colour cell and check both colours
+  // Scale the decoded grid the same way crabRows does, then confirm a two-colour cell maps back
+  // to the top/bottom pixels of that scaled grid.
+  const grid = scaleGrid(decodeFrame(ANIMS_V2.idle!, 0), V2_SCALE)
   const rows = crabRows('idle', 'v2', 0, 0, false).rows
   const mixed = rows.flat().find(r => r.ch === '▀' && r.bg !== undefined)
   expect(mixed?.fg).toBeDefined()
-  const grid = decodeFrame(ANIMS_V2.idle!, 0)
   const y = rows.findIndex(row => row.some(r => r === mixed))
   let x = 0
   for (const r of rows[y]!) {
@@ -127,9 +153,10 @@ test('oneshots hold, previews and state animations loop', () => {
 })
 
 test('pane columns fit the widest v2 frame plus the margin', () => {
-  expect(paneColumns('v2')).toBe(V2_MAX_WIDTH + V2_MARGIN)
+  // The pane and reserved crab area shrink with the art by V2_SCALE.
+  expect(paneColumns('v2')).toBe(scaledW(V2_MAX_WIDTH) + V2_MARGIN)
   expect(paneColumns('v1')).toBe(20)
-  expect(crabRowCount('v2')).toBe(V2_MAX_HEIGHT / 2)
+  expect(crabRowCount('v2')).toBe(scaledRows(V2_MAX_HEIGHT))
   expect(crabRowCount('v1')).toBe(8)
 })
 
